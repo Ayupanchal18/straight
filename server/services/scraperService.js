@@ -554,9 +554,34 @@ async function scrapeMatchDetails(matchUrl) {
       const overNbr = c.ballMetric ? Math.floor(c.ballMetric) : c.overNumber;
       const ballNbr = c.ballMetric ? Math.round((c.ballMetric - Math.floor(c.ballMetric)) * 10) : c.ballNbr;
       const text = (c.commText || '').replace(/<[^>]*>/g, '').trim();
-      const isFour = c.isFour || text.toLowerCase().includes('four') || text.includes(' 4 ');
-      const isSix = c.isSix || text.toLowerCase().includes('six') || text.includes(' 6 ');
-      const isWicket = c.isWicket || text.toLowerCase().includes('out') || text.toLowerCase().includes('wicket');
+      const event = (c.event || '').toUpperCase();
+      const lowerText = text.toLowerCase();
+
+      // 1. Authoritative API fields
+      let isWicket = Boolean(event === 'WICKET' || c.isWicket === true || c.wktType || (c.event && event.includes('WICKET')));
+      let isFour = Boolean(event === 'FOUR' || c.isFour === true || c.batRuns === 4);
+      let isSix = Boolean(event === 'SIX' || c.isSix === true || c.batRuns === 6);
+
+      // 2. Strict text-based evaluation (only if API fields did not explicitly mark it)
+      if (!isWicket && !isFour && !isSix) {
+        // Actual dismissal patterns in cricket commentary (avoiding "spread out", "stepped out", "inside out", "around the wicket")
+        isWicket = Boolean(
+          /\bOUT\b[!,.\s]/i.test(text) ||
+          /,\s*OUT\b/i.test(text) ||
+          /\b(clean\s+bowled|bowled\s+him|trapped\s+lbw|caught\s+behind|run\s+out|stumped\s+by)\b/i.test(lowerText) ||
+          /\b(c\s+[\w\s]+\s+b\s+[\w\s]+|lbw\s+b\s+[\w\s]+|st\s+[\w\s]+\s+b\s+[\w\s]+)\b/i.test(lowerText)
+        ) && !/\bnot\s+out\b/i.test(lowerText) && !/\bno\s+ball\b/i.test(lowerText);
+
+        isFour = Boolean(
+          /\bFOUR\b[!,.\s]/i.test(text) ||
+          /\b(four\s+runs|hits\s+a\s+four|punches\s+it\s+for\s+four|driven\s+for\s+four|races\s+to\s+the\s+fence|crosses\s+the\s+rope)\b/i.test(lowerText)
+        ) && !isWicket;
+
+        isSix = Boolean(
+          /\bSIX\b[!,.\s]/i.test(text) ||
+          /\b(six\s+runs|hits\s+a\s+six|maximum|into\s+the\s+crowd|over\s+the\s+fence)\b/i.test(lowerText)
+        ) && !isWicket;
+      }
 
       return {
         overNumber: overNbr,

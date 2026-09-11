@@ -680,26 +680,32 @@ export const MatchDetailModal = ({ match, onClose }) => {
                 </div>
               ) : (
                 <div className="space-y-2 sm:space-y-2.5">
-                  {commentaryList.map((c, i) => (
-                    <div 
-                      key={i} 
-                      className={`flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl border transition-all ${
-                        c.isWicket ? 'bg-rose-500/10 border-rose-500/30' :
-                        c.isSix ? 'bg-purple-500/10 border-purple-500/30' :
-                        c.isFour ? 'bg-emerald-500/10 border-emerald-500/30' :
-                        'bg-[#0d1424] border-white/5'
-                      }`}
-                    >
-                      <div className="flex flex-col items-center min-w-[36px] sm:min-w-[42px] flex-shrink-0">
-                        <span className="text-[11px] sm:text-xs font-mono font-black text-emerald-400">
-                          {c.overNumber !== undefined && c.ballNumber !== undefined
-                            ? `${c.overNumber}.${c.ballNumber}`
-                            : '–'}
-                        </span>
-                        {c.isWicket && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-rose-500 text-white mt-1">W</span>}
-                        {c.isSix && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-purple-500 text-white mt-1">6</span>}
-                        {c.isFour && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-emerald-500 text-slate-950 mt-1">4</span>}
-                      </div>
+                  {commentaryList.map((c, i) => {
+                    const hasBallMetric = c.overNumber !== undefined && c.ballNumber !== undefined;
+                    const isWicketEvent = Boolean(c.isWicket && (hasBallMetric || c.event === 'WICKET'));
+                    const isSixEvent = Boolean(c.isSix && hasBallMetric);
+                    const isFourEvent = Boolean(c.isFour && hasBallMetric);
+
+                    return (
+                      <div 
+                        key={i} 
+                        className={`flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl border transition-all ${
+                          isWicketEvent ? 'bg-rose-500/10 border-rose-500/30' :
+                          isSixEvent ? 'bg-purple-500/10 border-purple-500/30' :
+                          isFourEvent ? 'bg-emerald-500/10 border-emerald-500/30' :
+                          'bg-[#0d1424] border-white/5'
+                        }`}
+                      >
+                        <div className="flex flex-col items-center min-w-[36px] sm:min-w-[42px] flex-shrink-0">
+                          <span className="text-[11px] sm:text-xs font-mono font-black text-emerald-400">
+                            {hasBallMetric
+                              ? `${c.overNumber}.${c.ballNumber}`
+                              : '–'}
+                          </span>
+                          {isWicketEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-rose-500 text-white mt-1">W</span>}
+                          {isSixEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-purple-500 text-white mt-1">6</span>}
+                          {isFourEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-emerald-500 text-slate-950 mt-1">4</span>}
+                        </div>
 
                       <div className="flex-1 min-w-0">
                         {(c.batsman || c.bowler) && (
@@ -710,16 +716,17 @@ export const MatchDetailModal = ({ match, onClose }) => {
                           </div>
                         )}
                         <p className={`text-[11px] sm:text-xs leading-relaxed ${
-                          c.isWicket ? 'text-rose-200 font-semibold' :
-                          c.isSix ? 'text-purple-200' :
-                          c.isFour ? 'text-emerald-200' :
+                          isWicketEvent ? 'text-rose-200 font-semibold' :
+                          isSixEvent ? 'text-purple-200' :
+                          isFourEvent ? 'text-emerald-200' :
                           'text-slate-300'
                         }`}>
                           {c.text}
                         </p>
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               )}
             </div>

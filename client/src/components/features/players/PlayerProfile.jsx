@@ -77,6 +77,10 @@ export const PlayerProfile = ({ player, onCompareWithThisPlayer }) => {
                 <img
                   src={player.image}
                   alt={player.name}
+                  loading="lazy"
+                  decoding="async"
+                  width="144"
+                  height="144"
                   className="w-full h-full object-cover object-top rounded-xl group-hover:scale-105 transition-transform duration-300"
                   onError={(e) => {
                     e.target.style.display = 'none';

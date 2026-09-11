@@ -29,9 +29,18 @@ export function useLiveScores(pollInterval = 30000, autoPoll = true) {
   useEffect(() => {
     fetchScores();
 
+    // Immediate refetch when user switches back to the tab
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchScores(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
     if (autoPoll) {
       timerRef.current = setInterval(() => {
-        // Only fetch if tab is active/visible
         if (document.visibilityState === 'visible') {
           fetchScores(true);
         }
@@ -40,6 +49,8 @@ export function useLiveScores(pollInterval = 30000, autoPoll = true) {
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
     };
   }, [fetchScores, pollInterval, autoPoll]);
 

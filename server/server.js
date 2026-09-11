@@ -8,7 +8,14 @@ const { apiLimiter } = require('./middlewares/rateLimiter');
 const { errorHandler, AppError } = require('./middlewares/errorHandler');
 const apiRoutes = require('./routes/api');
 
+const compression = require('compression');
 const app = express();
+
+// Enable Gzip/Brotli response compression for all responses
+app.use(compression({
+  threshold: 1024, // Compress responses above 1KB
+  level: 6
+}));
 
 // Trust reverse proxy headers (Render, Heroku, Nginx)
 app.set('trust proxy', 1);
@@ -37,8 +44,8 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Apply general rate limiter to API
 app.use('/api', apiLimiter);
@@ -51,13 +58,28 @@ const clientDistPath = path.join(__dirname, '../client/dist');
 const hasClientDist = fs.existsSync(clientDistPath);
 
 if (hasClientDist) {
-  app.use(express.static(clientDistPath));
+  // Serve hashed assets with long-term immutable caching (1 year)
+  app.use('/assets', express.static(path.join(clientDistPath, 'assets'), {
+    maxAge: '1y',
+    immutable: true,
+  }));
+
+  // Serve other root static files with standard cache validation
+  app.use(express.static(clientDistPath, {
+    maxAge: '1h',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    }
+  }));
 
   // Catch-all route to serve SPA frontend for client-side routing
   app.get('*', (req, res, next) => {
     if (req.originalUrl.startsWith('/api')) {
       return next(new AppError(`Cannot find ${req.originalUrl} on this server.`, 404));
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 } else {

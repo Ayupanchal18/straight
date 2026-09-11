@@ -1,12 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { FavoritesProvider } from './context/FavoritesContext';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { LiveScoresList } from './components/features/live/LiveScoresList';
-import { ScheduleList } from './components/features/schedule/ScheduleList';
-import { PlayerSearch } from './components/features/players/PlayerSearch';
-import { PlayerCompare } from './components/features/compare/PlayerCompare';
-import { FavoritesView } from './components/features/favorites/FavoritesView';
+import { Skeleton } from './components/ui/Skeleton';
+
+// Lazily load secondary tabs to minimize initial bundle size and speed up FCP
+const ScheduleList = lazy(() => import('./components/features/schedule/ScheduleList').then(m => ({ default: m.ScheduleList })));
+const PlayerSearch = lazy(() => import('./components/features/players/PlayerSearch').then(m => ({ default: m.PlayerSearch })));
+const PlayerCompare = lazy(() => import('./components/features/compare/PlayerCompare').then(m => ({ default: m.PlayerCompare })));
+const FavoritesView = lazy(() => import('./components/features/favorites/FavoritesView').then(m => ({ default: m.FavoritesView })));
+
+const TabLoadingFallback = () => (
+  <div className="space-y-4 animate-pulse">
+    <div className="h-40 rounded-2xl bg-slate-900/60 border border-white/5" />
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="h-64 rounded-2xl bg-slate-900/40 border border-white/5" />
+      <div className="h-64 rounded-2xl bg-slate-900/40 border border-white/5" />
+    </div>
+  </div>
+);
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('live');
@@ -46,28 +59,30 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'schedule' && <ScheduleList />}
+          <Suspense fallback={<TabLoadingFallback />}>
+            {activeTab === 'schedule' && <ScheduleList />}
 
-          {activeTab === 'players' && (
-            <PlayerSearch
-              initialQuery={selectedPlayerQuery}
-              onCompare={handleCompareFromProfile}
-            />
-          )}
+            {activeTab === 'players' && (
+              <PlayerSearch
+                initialQuery={selectedPlayerQuery}
+                onCompare={handleCompareFromProfile}
+              />
+            )}
 
-          {activeTab === 'compare' && (
-            <PlayerCompare
-              defaultPlayer1={comparePlayer1}
-              defaultPlayer2={comparePlayer2}
-            />
-          )}
+            {activeTab === 'compare' && (
+              <PlayerCompare
+                defaultPlayer1={comparePlayer1}
+                defaultPlayer2={comparePlayer2}
+              />
+            )}
 
-          {activeTab === 'favorites' && (
-            <FavoritesView
-              onSelectPlayer={handleSelectPlayerFromWatchlist}
-              onSelectTab={setActiveTab}
-            />
-          )}
+            {activeTab === 'favorites' && (
+              <FavoritesView
+                onSelectPlayer={handleSelectPlayerFromWatchlist}
+                onSelectTab={setActiveTab}
+              />
+            )}
+          </Suspense>
         </main>
 
         {/* Footer */}

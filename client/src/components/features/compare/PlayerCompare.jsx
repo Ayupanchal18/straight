@@ -126,7 +126,15 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-xl bg-[#080d1a] p-1 border border-emerald-500/40 flex-shrink-0 overflow-hidden">
                   {p1.image ? (
-                    <img src={p1.image} alt={p1.name} className="w-full h-full object-cover object-top rounded-lg" />
+                    <img 
+                      src={p1.image} 
+                      alt={p1.name} 
+                      loading="lazy"
+                      decoding="async"
+                      width="64"
+                      height="64"
+                      className="w-full h-full object-cover object-top rounded-lg" 
+                    />
                   ) : (
                     <User className="w-8 h-8 text-slate-500 m-auto mt-3" />
                   )}
@@ -149,7 +157,15 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-xl bg-[#080d1a] p-1 border border-sky-500/40 flex-shrink-0 overflow-hidden">
                   {p2.image ? (
-                    <img src={p2.image} alt={p2.name} className="w-full h-full object-cover object-top rounded-lg" />
+                    <img 
+                      src={p2.image} 
+                      alt={p2.name} 
+                      loading="lazy"
+                      decoding="async"
+                      width="64"
+                      height="64"
+                      className="w-full h-full object-cover object-top rounded-lg" 
+                    />
                   ) : (
                     <User className="w-8 h-8 text-slate-500 m-auto mt-3" />
                   )}

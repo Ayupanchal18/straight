@@ -10,6 +10,7 @@
   "dependencies": {
     "axios": "^1.7.9",
     "cheerio": "^1.0.0",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "cricket-hub-mern": "file:..",
     "dotenv": "^16.4.7",

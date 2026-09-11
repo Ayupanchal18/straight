@@ -59,6 +59,61 @@ const POPULAR_PLAYER_MAP = {
 };
 
 /**
+ * Accurately classify match as Live, Upcoming, or Completed
+ */
+function evaluateMatchState(m, header = {}, mini = {}) {
+  const statusLower = (m.status || header.status || mini.status || '').toLowerCase().trim();
+  const stateLower = (m.state || header.state || '').toLowerCase().trim();
+  const rawTextLower = (m.rawText || '').toLowerCase().trim();
+
+  // 1. Is it Completed / Ended?
+  const isComplete = Boolean(
+    header.complete ||
+    stateLower === 'complete' ||
+    stateLower === 'result' ||
+    statusLower.includes(' won') ||
+    statusLower.includes('won by') ||
+    statusLower.includes('match drawn') ||
+    statusLower.includes('match tied') ||
+    statusLower.includes('abandon') ||
+    statusLower.includes('no result') ||
+    statusLower.includes('conceded') ||
+    rawTextLower.includes(' won') ||
+    rawTextLower.includes(' - complete') ||
+    rawTextLower.includes(' - nhnts won') ||
+    rawTextLower.includes(' - indw won') ||
+    rawTextLower.includes(' - tkrw won') ||
+    rawTextLower.includes(' - gloucs won')
+  );
+
+  // 2. Is it Upcoming / Not started yet?
+  const isUpcoming = Boolean(
+    !isComplete && (
+      stateLower === 'preview' ||
+      stateLower === 'upcoming' ||
+      stateLower === 'scheduled' ||
+      statusLower === 'preview' ||
+      statusLower === 'scheduled' ||
+      statusLower === 'upcoming' ||
+      statusLower.includes('starts at') ||
+      statusLower.includes('match starts at') ||
+      statusLower.includes('toss at') ||
+      statusLower.includes('toss delayed') ||
+      statusLower.includes('no toss yet') ||
+      rawTextLower.includes(' - preview') ||
+      rawTextLower.includes(' - scheduled') ||
+      rawTextLower.includes('starts at') ||
+      (!m.team1Score && !m.team2Score && (!m.inningsScores || m.inningsScores.length === 0) && (!m.currentBatsmen || m.currentBatsmen.length === 0) && !statusLower.includes('live') && !statusLower.includes('opt to bat') && !statusLower.includes('opt to bowl'))
+    )
+  );
+
+  // 3. Truly LIVE match (in progress right now)
+  const isLive = !isComplete && !isUpcoming;
+
+  return { isLive, isComplete, isUpcoming };
+}
+
+/**
  * Scrape Live Scores from Cricbuzz — enriched with JSON API for actual scores
  */
 async function scrapeLiveMatches() {
@@ -111,7 +166,7 @@ async function scrapeLiveMatches() {
 
       const cleanLink = href.startsWith('http') ? href : `https://www.cricbuzz.com${href}`;
 
-      matchMap.set(matchId, {
+      const rawMatchObj = {
         id: `match-${matchId}`,
         matchId,
         header: `${team1} vs ${team2}`,
@@ -120,9 +175,7 @@ async function scrapeLiveMatches() {
         matchType,
         rawText: title,
         status: status || 'Scheduled',
-        isLive: true,
         cricbuzzLink: cleanLink,
-        // Score fields (enriched below)
         team1Score: null,
         team2Score: null,
         team1Overs: null,
@@ -130,14 +183,20 @@ async function scrapeLiveMatches() {
         currentBatsmen: [],
         currentBowlers: [],
         inningsScores: [],
-      });
+      };
+
+      const initialClassification = evaluateMatchState(rawMatchObj);
+      rawMatchObj.isLive = initialClassification.isLive;
+      rawMatchObj.isComplete = initialClassification.isComplete;
+      rawMatchObj.isUpcoming = initialClassification.isUpcoming;
+
+      matchMap.set(matchId, rawMatchObj);
     });
 
     const matches = Array.from(matchMap.values());
 
     // Step 2: Batch-enrich matches with live scores from JSON API
-    // Fetch top N matches in parallel to keep latency low
-    const enrichLimit = Math.min(matches.length, 25);
+    const enrichLimit = Math.min(matches.length, 35);
     const enrichPromises = matches.slice(0, enrichLimit).map(async function (m) {
       try {
         const { data } = await client.get(
@@ -172,14 +231,6 @@ async function scrapeLiveMatches() {
 
         // Currently batting team ID (for active indicator)
         m.currentBattingTeamId = mini.batTeam?.teamId || null;
-
-        // Determine live/complete state
-        m.isLive = !header.complete
-          && m.state !== 'Complete'
-          && !m.status.toLowerCase().includes(' won')
-          && !m.status.toLowerCase().includes('abandoned')
-          && !m.status.toLowerCase().includes('no result');
-        m.isComplete = !!header.complete;
 
         // Parse all innings scores
         const innList = scoreDetails.inningsScoreList || [];
@@ -258,8 +309,18 @@ async function scrapeLiveMatches() {
         m.recentOvers = mini.recentOvsStats || null;
         m.recentBalls = mini.recentOvsStats ? mini.recentOvsStats.trim().split(/\s+/).filter(Boolean) : [];
 
+        // Accurate state classification after receiving real-time API data
+        const classification = evaluateMatchState(m, header, mini);
+        m.isLive = classification.isLive;
+        m.isComplete = classification.isComplete;
+        m.isUpcoming = classification.isUpcoming;
+
       } catch (e) {
-        // Non-critical — keep the HTML-parsed data
+        // Fall back to title classification
+        const classification = evaluateMatchState(m);
+        m.isLive = classification.isLive;
+        m.isComplete = classification.isComplete;
+        m.isUpcoming = classification.isUpcoming;
       }
     });
 

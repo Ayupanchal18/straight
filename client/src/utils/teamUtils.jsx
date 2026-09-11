@@ -177,3 +177,68 @@ export const TeamBadge = ({ name = '', shortName = '', size = 'md', className = 
     </div>
   );
 };
+
+/**
+ * Robust match state evaluation helpers for frontend components
+ */
+export function isMatchComplete(m) {
+  if (!m) return false;
+  if (m.isComplete) return true;
+  const status = (m.status || '').toLowerCase();
+  const state = (m.state || '').toLowerCase();
+  const rawText = (m.rawText || '').toLowerCase();
+
+  return Boolean(
+    state === 'complete' ||
+    state === 'result' ||
+    status.includes(' won') ||
+    status.includes('won by') ||
+    status.includes('match drawn') ||
+    status.includes('match tied') ||
+    status.includes('abandon') ||
+    status.includes('no result') ||
+    rawText.includes(' won') ||
+    rawText.includes(' - complete')
+  );
+}
+
+export function isMatchUpcoming(m) {
+  if (!m) return false;
+  if (isMatchComplete(m)) return false;
+  if (m.isUpcoming) return true;
+
+  const status = (m.status || '').toLowerCase();
+  const state = (m.state || '').toLowerCase();
+  const rawText = (m.rawText || '').toLowerCase();
+
+  return Boolean(
+    state === 'preview' ||
+    state === 'upcoming' ||
+    state === 'scheduled' ||
+    status === 'preview' ||
+    status === 'scheduled' ||
+    status === 'upcoming' ||
+    status.includes('starts at') ||
+    status.includes('match starts at') ||
+    status.includes('toss at') ||
+    status.includes('toss delayed') ||
+    rawText.includes(' - preview') ||
+    rawText.includes(' - scheduled') ||
+    rawText.includes('starts at') ||
+    (!m.team1Score && !m.team2Score && (!m.inningsScores || m.inningsScores.length === 0) && (!m.currentBatsmen || m.currentBatsmen.length === 0) && !status.includes('live') && !status.includes('opt to bat') && !status.includes('opt to bowl'))
+  );
+}
+
+export function isMatchLive(m) {
+  if (!m) return false;
+  if (isMatchComplete(m)) return false;
+  if (isMatchUpcoming(m)) return false;
+  return Boolean(
+    m.isLive ||
+    m.state === 'in_progress' ||
+    m.state === 'live' ||
+    m.state === 'inprogress' ||
+    (m.currentBatsmen && m.currentBatsmen.length > 0) ||
+    Boolean(m.team1Score && m.team1Score !== '–' && !isMatchUpcoming(m) && !isMatchComplete(m))
+  );
+}

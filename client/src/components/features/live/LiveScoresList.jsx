@@ -20,11 +20,12 @@ import { FeatureBanner } from './FeatureBanner';
 import { MatchDetailModal } from './MatchDetailModal';
 import { Button } from '../../ui/Button';
 import { Skeleton } from '../../ui/Skeleton';
+import { isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
 
 export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
   const { matches, loading, error, lastUpdated, refresh } = useLiveScores(30000, true);
   const { pinnedMatchId, unpinMatch, favorites } = useFavorites();
-  const [filter, setFilter] = useState('all'); // all, live, international, t20, completed
+  const [filter, setFilter] = useState('all'); // all, live, upcoming, international, t20, completed
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -45,9 +46,11 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
     let list = matches;
 
     if (filter === 'live') {
-      list = list.filter(m => m.isLive && !m.isComplete);
+      list = list.filter(isMatchLive);
+    } else if (filter === 'upcoming') {
+      list = list.filter(isMatchUpcoming);
     } else if (filter === 'completed') {
-      list = list.filter(m => m.isComplete || (!m.isLive && m.status?.toLowerCase().includes('won')));
+      list = list.filter(isMatchComplete);
     } else if (filter === 'international') {
       list = list.filter(m => 
         m.matchFormat?.includes('TEST') || 
@@ -80,10 +83,12 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
   }, [matches, filter, searchQuery]);
 
   const liveMatchesList = useMemo(() => {
-    return matches.filter(m => m.isLive && !m.isComplete);
+    return matches.filter(isMatchLive);
   }, [matches]);
 
   const liveCount = liveMatchesList.length;
+  const upcomingCount = useMemo(() => matches.filter(isMatchUpcoming).length, [matches]);
+  const completedCount = useMemo(() => matches.filter(isMatchComplete).length, [matches]);
 
   const dateDisplay = selectedDate.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -130,6 +135,16 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
             <span>Live ({liveCount})</span>
           </button>
           <button
+            onClick={() => setFilter('upcoming')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              filter === 'upcoming' 
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
+            }`}
+          >
+            Upcoming ({upcomingCount})
+          </button>
+          <button
             onClick={() => setFilter('international')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               filter === 'international' 
@@ -157,7 +172,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60 border border-transparent'
             }`}
           >
-            Results
+            Results ({completedCount})
           </button>
         </div>
 
@@ -207,7 +222,19 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
           <div className="flex items-center justify-between pb-1">
             <div className="flex items-baseline gap-2">
               <h2 className="text-lg sm:text-xl font-black text-white font-display">
-                {filter === 'all' ? 'All Matches' : filter === 'live' ? 'Live Matches' : filter.toUpperCase()}
+                {filter === 'all' 
+                  ? 'All Matches' 
+                  : filter === 'live' 
+                  ? 'Live Matches' 
+                  : filter === 'upcoming'
+                  ? 'Upcoming Fixtures'
+                  : filter === 'completed'
+                  ? 'Match Results'
+                  : filter === 'international'
+                  ? 'International Matches'
+                  : filter === 't20'
+                  ? 'T20 Leagues'
+                  : filter.toUpperCase()}
               </h2>
               <span className="text-xs text-slate-400 hidden sm:inline">
                 Showing {filteredMatches.length} matches

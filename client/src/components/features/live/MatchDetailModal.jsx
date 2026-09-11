@@ -10,7 +10,7 @@ import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import cricketApi from '../../../services/api';
 import { useFavorites } from '../../../context/FavoritesContext';
-import { TeamBadge, getTeamTheme } from '../../../utils/teamUtils.jsx';
+import { TeamBadge, getTeamTheme, isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
 
 export const MatchDetailModal = ({ match, onClose }) => {
   const [details, setDetails] = useState(null);
@@ -210,15 +210,21 @@ export const MatchDetailModal = ({ match, onClose }) => {
                 {details?.matchFormat || match.matchFormat || match.matchType || 'T20'} • {details?.matchDescription || match.matchDescription || match.header || 'MATCH'}
               </span>
               
-              {match.isLive && !details?.isComplete && (
+              {isMatchLive(details || match) && (
                 <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase tracking-wide">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
                   LIVE
                 </span>
               )}
 
-              {details?.isComplete && (
+              {isMatchComplete(details || match) && (
                 <Badge variant="default" size="sm" className="text-[9px] px-1.5 py-0.5">COMPLETED</Badge>
+              )}
+
+              {isMatchUpcoming(details || match) && (
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase">
+                  UPCOMING
+                </span>
               )}
             </div>
 

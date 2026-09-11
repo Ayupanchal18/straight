@@ -131,9 +131,11 @@ export const MatchDetailModal = ({ match, onClose }) => {
   
   const currentOvers = details?.currentInnings?.overs || match.team2Overs || match.team1Overs || 0;
   const currentBalls = Math.floor(currentOvers) * 6 + Math.round((currentOvers - Math.floor(currentOvers)) * 10);
-  const isT20 = (details?.matchFormat || match.matchFormat || match.matchType || '').toLowerCase().includes('t20');
-  const maxBalls = isT20 ? 120 : 300;
-  const ballsRemaining = details?.ballsRemaining || (target ? Math.max(0, maxBalls - currentBalls) : null);
+  const matchFormatString = `${details?.matchFormat || ''} ${match.matchFormat || ''} ${match.matchType || ''} ${match.header || ''} ${details?.matchDescription || ''}`.toLowerCase();
+  const isTestMatch = matchFormatString.includes('test') || matchFormatString.includes('four-day') || matchFormatString.includes('three-day') || matchFormatString.includes('first-class') || matchFormatString.includes('fc');
+  const isT20 = matchFormatString.includes('t20');
+  const maxBalls = isT20 ? 120 : (isTestMatch ? null : 300);
+  const ballsRemaining = details?.ballsRemaining || (target && maxBalls ? Math.max(0, maxBalls - currentBalls) : null);
   
   const crr = details?.currentInnings?.currentRunRate || match.currentRunRate || '5.80';
   const rrr = details?.currentInnings?.requiredRunRate || (requiredRuns && ballsRemaining && ballsRemaining > 0 ? ((requiredRuns / ballsRemaining) * 6).toFixed(2) : null);
@@ -531,34 +533,36 @@ export const MatchDetailModal = ({ match, onClose }) => {
                 </div>
               </div>
 
-              {/* ── Fall of Wickets Timeline Cards ── */}
-              <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3.5 sm:p-4">
-                <div className="flex items-center gap-2 mb-2.5 sm:mb-3">
-                  <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />
-                  <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">Fall of Wickets</span>
-                </div>
+              {/* ── Fall of Wickets Timeline Cards (Limited Overs matches only) ── */}
+              {!isTestMatch && fallOfWickets?.length > 0 && (
+                <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3.5 sm:p-4">
+                  <div className="flex items-center gap-2 mb-2.5 sm:mb-3">
+                    <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />
+                    <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">Fall of Wickets</span>
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-2.5">
-                  {fallOfWickets.map((w, idx) => (
-                    <div 
-                      key={idx}
-                      className="p-2.5 sm:p-3 rounded-xl bg-slate-900/80 border border-white/5 flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0 pr-1">
-                        <span className="text-xs font-bold text-white block truncate">
-                          {idx + 1}. {w.name}
-                        </span>
-                        <span className="text-[10px] sm:text-[11px] font-mono text-emerald-400 block mt-0.5">
-                          {w.score || `${w.runs}/${idx + 1}`} ({w.overs} ov)
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-2.5">
+                    {fallOfWickets.map((w, idx) => (
+                      <div 
+                        key={idx}
+                        className="p-2.5 sm:p-3 rounded-xl bg-slate-900/80 border border-white/5 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0 pr-1">
+                          <span className="text-xs font-bold text-white block truncate">
+                            {idx + 1}. {w.name}
+                          </span>
+                          <span className="text-[10px] sm:text-[11px] font-mono text-emerald-400 block mt-0.5">
+                            {w.score || `${w.runs}/${idx + 1}`} ({w.overs} ov)
+                          </span>
+                        </div>
+                        <span className="text-xs font-extrabold text-slate-300 tabular-nums flex-shrink-0">
+                          {w.runs} {w.balls ? `(${w.balls})` : ''}
                         </span>
                       </div>
-                      <span className="text-xs font-extrabold text-slate-300 tabular-nums flex-shrink-0">
-                        {w.runs} {w.balls ? `(${w.balls})` : ''}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
             </div>
           )}

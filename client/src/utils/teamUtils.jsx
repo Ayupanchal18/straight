@@ -129,16 +129,17 @@ export function getTeamTheme(teamName = '', shortName = '') {
  * 2. Secondary FlagCDN PNG fallback on error
  * 3. Graceful CSS Team Crest with Initials
  */
-export const TeamBadge = ({ name = '', shortName = '', size = 'md' }) => {
+export const TeamBadge = ({ name = '', shortName = '', size = 'md', className = '' }) => {
   const theme = getTeamTheme(name, shortName);
   const [imgFailed, setImgFailed] = useState(false);
   const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
   const sizeClasses = {
+    xs: 'w-4 h-4 text-[7px]',
     sm: 'w-6 h-6 text-[9px]',
     md: 'w-8 h-8 text-xs',
-    lg: 'w-11 h-11 sm:w-12 sm:h-12 text-sm',
-    xl: 'w-12 h-12 sm:w-14 sm:h-14 text-base',
+    lg: 'w-10 h-10 sm:w-11 sm:h-11 text-sm',
+    xl: 'w-11 h-11 sm:w-14 sm:h-14 text-base',
   }[size] || 'w-8 h-8 text-xs';
 
   const handleImageError = () => {
@@ -158,7 +159,7 @@ export const TeamBadge = ({ name = '', shortName = '', size = 'md' }) => {
 
   if (currentSrc && !imgFailed) {
     return (
-      <div className={`${sizeClasses} flex-shrink-0 flex items-center justify-center rounded-full overflow-hidden shadow-md ring-1 ring-white/20 bg-slate-900`}>
+      <div className={`${sizeClasses} ${className} flex-shrink-0 flex items-center justify-center rounded-full overflow-hidden shadow-md ring-1 ring-white/20 bg-slate-900`}>
         <img
           src={currentSrc}
           alt={name || 'Team'}
@@ -171,7 +172,7 @@ export const TeamBadge = ({ name = '', shortName = '', size = 'md' }) => {
   }
 
   return (
-    <div className={`${sizeClasses} rounded-xl bg-gradient-to-br ${theme.bg} flex items-center justify-center font-black shadow-md border ${theme.border} flex-shrink-0`}>
+    <div className={`${sizeClasses} ${className} rounded-xl bg-gradient-to-br ${theme.bg} flex items-center justify-center font-black shadow-md border ${theme.border} flex-shrink-0`}>
       <span className={theme.text}>{theme.short}</span>
     </div>
   );

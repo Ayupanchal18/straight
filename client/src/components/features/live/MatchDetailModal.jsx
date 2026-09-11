@@ -70,12 +70,59 @@ export const MatchDetailModal = ({ match, onClose }) => {
   const t1Short = details?.team1?.shortName || match.team1ShortName || t1Name.slice(0, 4).toUpperCase();
   const t2Short = details?.team2?.shortName || match.team2ShortName || t2Name.slice(0, 4).toUpperCase();
 
-  // Innings scores & live metrics
+  // Innings scores & live metrics accurately mapped by team identity
   const innScores = details?.inningsScores || match.inningsScores || [];
-  const t1Score = innScores[0]?.score ? `${innScores[0].score}/${innScores[0].wickets}` : (match.team1Score || '–');
-  const t1Overs = innScores[0]?.overs ? `(${innScores[0].overs} ov)` : (match.team1Overs ? `(${match.team1Overs} ov)` : '');
-  const t2Score = innScores[1]?.score ? `${innScores[1].score}/${innScores[1].wickets}` : (match.team2Score || (innScores[0] ? '' : '–'));
-  const t2Overs = innScores[1]?.overs ? `(${innScores[1].overs} ov)` : (match.team2Overs ? `(${match.team2Overs} ov)` : '');
+  const t1Id = details?.team1?.id || match.team1Id;
+  const t2Id = details?.team2?.id || match.team2Id;
+
+  const isTeam1Match = (inn) => {
+    if (t1Id && inn.battingTeamId === t1Id) return true;
+    if (inn.batTeamName && t1Name) {
+      const cleanInn = inn.batTeamName.toLowerCase().replace(/ women| women's| men| u19/g, '').trim();
+      const cleanT1 = t1Name.toLowerCase().replace(/ women| women's| men| u19/g, '').trim();
+      return cleanInn === cleanT1 || cleanT1.includes(cleanInn) || cleanInn.includes(cleanT1);
+    }
+    return false;
+  };
+
+  const isTeam2Match = (inn) => {
+    if (t2Id && inn.battingTeamId === t2Id) return true;
+    if (inn.batTeamName && t2Name) {
+      const cleanInn = inn.batTeamName.toLowerCase().replace(/ women| women's| men| u19/g, '').trim();
+      const cleanT2 = t2Name.toLowerCase().replace(/ women| women's| men| u19/g, '').trim();
+      return cleanInn === cleanT2 || cleanT2.includes(cleanInn) || cleanInn.includes(cleanT2);
+    }
+    return false;
+  };
+
+  const t1InningsList = innScores.filter(isTeam1Match);
+  const t2InningsList = innScores.filter(isTeam2Match);
+
+  const t1LatestInnings = t1InningsList.length > 0 ? t1InningsList[t1InningsList.length - 1] : null;
+  const t2LatestInnings = t2InningsList.length > 0 ? t2InningsList[t2InningsList.length - 1] : null;
+
+  // Primary scores accurately matched to each team
+  const t1Score = t1LatestInnings?.score !== undefined 
+    ? `${t1LatestInnings.score}/${t1LatestInnings.wickets ?? 0}` 
+    : (match.team1Score || (innScores.length === 1 && !t2LatestInnings ? `${innScores[0].score}/${innScores[0].wickets}` : '–'));
+
+  const t1Overs = t1LatestInnings?.overs 
+    ? `(${t1LatestInnings.overs} ov)` 
+    : (match.team1Overs ? `(${match.team1Overs} ov)` : '');
+
+  const t2Score = t2LatestInnings?.score !== undefined 
+    ? `${t2LatestInnings.score}/${t2LatestInnings.wickets ?? 0}` 
+    : (match.team2Score || (innScores.length === 2 && !t1LatestInnings ? `${innScores[1].score}/${innScores[1].wickets}` : (innScores.length > 0 ? '' : '–')));
+
+  const t2Overs = t2LatestInnings?.overs 
+    ? `(${t2LatestInnings.overs} ov)` 
+    : (match.team2Overs ? `(${match.team2Overs} ov)` : '');
+
+  // Determine which team is actively batting
+  const currentBattingTeamId = details?.currentInnings?.battingTeamId || match.currentBattingTeamId;
+  const isTeam1Batting = (currentBattingTeamId && (currentBattingTeamId === t1Id || currentBattingTeamId === match.team1Id)) || (!currentBattingTeamId && (t2Score === '–' || t2Score === ''));
+  const currentBattingTeamName = isTeam1Batting ? t1Name : t2Name;
+  const currentBattingScoreDisplay = isTeam1Batting ? `${t1Score} ${t1Overs}` : `${t2Score} ${t2Overs}`;
 
   // Live Chase & HUD metrics
   const target = details?.target || match.target || (innScores[0]?.score ? innScores[0].score + 1 : null);
@@ -227,8 +274,7 @@ export const MatchDetailModal = ({ match, onClose }) => {
               {/* Team 1 (Left) */}
               <div className="md:col-span-5 flex items-center justify-between md:justify-start gap-3">
                 <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-                  <TeamBadge name={t1Name} shortName={t1Short} size="lg" className="sm:hidden flex-shrink-0" />
-                  <TeamBadge name={t1Name} shortName={t1Short} size="xl" className="hidden sm:flex flex-shrink-0" />
+                  <TeamBadge name={t1Name} shortName={t1Short} size="xl" />
                   <div className="min-w-0">
                     <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">{t1Name}</h3>
                     <span className="text-[11px] sm:text-xs text-slate-400 font-bold block">{t1Short}</span>
@@ -272,16 +318,11 @@ export const MatchDetailModal = ({ match, onClose }) => {
                 </div>
 
                 <div className="flex items-center gap-2.5 sm:gap-3.5 order-1 md:order-2 flex-shrink-0">
-                  <div className="min-w-0 md:text-right hidden sm:block">
+                  <div className="min-w-0 md:text-right">
                     <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">{t2Name}</h3>
                     <span className="text-[11px] sm:text-xs text-slate-400 font-bold block">{t2Short}</span>
                   </div>
-                  <TeamBadge name={t2Name} shortName={t2Short} size="lg" className="sm:hidden flex-shrink-0" />
-                  <TeamBadge name={t2Name} shortName={t2Short} size="xl" className="hidden sm:flex flex-shrink-0" />
-                  <div className="min-w-0 sm:hidden">
-                    <h3 className="text-sm font-black text-white truncate">{t2Name}</h3>
-                    <span className="text-[11px] text-slate-400 font-bold block">{t2Short}</span>
-                  </div>
+                  <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
                 </div>
               </div>
 
@@ -439,8 +480,8 @@ export const MatchDetailModal = ({ match, onClose }) => {
                     <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
                     <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">At the Crease</span>
                   </div>
-                  <span className="text-[10px] sm:text-xs font-bold text-slate-400 truncate max-w-[200px] sm:max-w-none">
-                    {t1Name} — {t1Score} {t1Overs}
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-400 truncate max-w-[220px] sm:max-w-none">
+                    {currentBattingTeamName} — {currentBattingScoreDisplay} {target ? `| Target ${target}` : ''}
                   </span>
                 </div>
 

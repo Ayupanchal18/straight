@@ -23,11 +23,11 @@ export const MatchCard = ({ match, onSelectMatch }) => {
   const team1 = match.team1 || 'Team 1';
   const team2 = match.team2 || 'Team 2';
 
-  const live = isMatchLive(match);
-  const complete = isMatchComplete(match);
-  const upcoming = isMatchUpcoming(match);
-  const isBattingT1 = live && match.currentBattingTeamId && match.currentBattingTeamId === match.team1Id;
-  const isBattingT2 = live && match.currentBattingTeamId && match.currentBattingTeamId === match.team2Id;
+  const isLive = isMatchLive(match);
+  const isComplete = isMatchComplete(match);
+  const isUpcoming = isMatchUpcoming(match);
+  const isBattingT1 = isLive && match.currentBattingTeamId && match.currentBattingTeamId === match.team1Id;
+  const isBattingT2 = isLive && match.currentBattingTeamId && match.currentBattingTeamId === match.team2Id;
 
   // Derive venue fallback or city
   const venueDisplay = match.venue || 'Lord\'s, London';
@@ -49,12 +49,12 @@ export const MatchCard = ({ match, onSelectMatch }) => {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {live ? (
+          {isLive ? (
             <span className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase tracking-wide">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
               Live
             </span>
-          ) : complete ? (
+          ) : isComplete ? (
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 uppercase">
               Result
             </span>

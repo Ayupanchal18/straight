@@ -8,12 +8,12 @@ import {
   X,
   User
 } from 'lucide-react';
-import { TeamBadge } from '../../../utils/teamUtils.jsx';
+import { TeamBadge, isMatchLive } from '../../../utils/teamUtils.jsx';
 
 export const FeaturedMatchHero = ({ match, onSelectMatch, onUnpin }) => {
   if (!match) return null;
 
-  const isLive = match.isLive && !match.isComplete;
+  const isLive = isMatchLive(match);
   const isBattingT1 = match.currentBattingTeamId && match.currentBattingTeamId === match.team1Id;
   const isBattingT2 = match.currentBattingTeamId && match.currentBattingTeamId === match.team2Id;
 

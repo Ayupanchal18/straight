@@ -1,0 +1,17 @@
+{
+  "name": "cricket-hub-mern",
+  "version": "2.0.0",
+  "description": "Full-stack MERN Application for Cricket Hub with Tailwind CSS v3.4",
+  "private": true,
+  "scripts": {
+    "server": "npm --prefix server run dev",
+    "client": "npm --prefix client run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+    "start": "node server/server.js",
+    "install-all": "npm install && npm --prefix server install && npm --prefix client install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

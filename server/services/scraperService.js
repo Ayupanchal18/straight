@@ -550,19 +550,25 @@ async function scrapeMatchDetails(matchUrl) {
       commList = data.commentaryList;
     }
 
-    results.recentCommentary = commList.slice(0, 10).map(c => {
+    results.recentCommentary = commList.slice(0, 15).map(c => {
       const overNbr = c.ballMetric ? Math.floor(c.ballMetric) : c.overNumber;
       const ballNbr = c.ballMetric ? Math.round((c.ballMetric - Math.floor(c.ballMetric)) * 10) : c.ballNbr;
       const text = (c.commText || '').replace(/<[^>]*>/g, '').trim();
-      const event = (c.event || '').toUpperCase();
       const lowerText = text.toLowerCase();
 
-      // 1. Authoritative API fields
-      let isWicket = Boolean(event === 'WICKET' || c.isWicket === true || c.wktType || (c.event && event.includes('WICKET')));
-      let isFour = Boolean(event === 'FOUR' || c.isFour === true || c.batRuns === 4);
-      let isSix = Boolean(event === 'SIX' || c.isSix === true || c.batRuns === 6);
+      // Normalize event (can be Array ['four', 'all'], String 'FOUR', or undefined)
+      const eventArr = Array.isArray(c.event)
+        ? c.event.map(e => String(e).toLowerCase())
+        : typeof c.event === 'string'
+          ? [c.event.toLowerCase()]
+          : [];
 
-      // 2. Strict text-based evaluation (only if API fields did not explicitly mark it)
+      // 1. Authoritative API fields
+      let isWicket = Boolean(eventArr.includes('wicket') || c.isWicket === true || c.wktType);
+      let isFour = Boolean(eventArr.includes('four') || c.isFour === true || c.batRuns === 4);
+      let isSix = Boolean(eventArr.includes('six') || c.isSix === true || c.batRuns === 6);
+
+      // 2. Strict text-based evaluation (only if API event array did not explicitly classify it)
       if (!isWicket && !isFour && !isSix) {
         // Actual dismissal patterns in cricket commentary (avoiding "spread out", "stepped out", "inside out", "around the wicket")
         isWicket = Boolean(
@@ -587,7 +593,7 @@ async function scrapeMatchDetails(matchUrl) {
         overNumber: overNbr,
         ballNumber: ballNbr,
         text,
-        event: c.event || '',
+        event: eventArr.join(', '),
         batRuns: c.batRuns,
         isFour: !!isFour,
         isSix: !!isSix,

@@ -6,6 +6,7 @@ const config = require('./config/env');
 const { connectDB } = require('./config/db');
 const { apiLimiter } = require('./middlewares/rateLimiter');
 const { errorHandler, AppError } = require('./middlewares/errorHandler');
+const { initKeepAlive } = require('./services/keepAliveService');
 const apiRoutes = require('./routes/api');
 
 const compression = require('compression');
@@ -46,6 +47,16 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Root Health Check for Monitoring Tools (UptimeRobot, cron-job.org, Render)
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    service: 'cricket-hub-api',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // Apply general rate limiter to API
 app.use('/api', apiLimiter);
@@ -112,6 +123,8 @@ app.use(errorHandler);
 // Start Server
 const server = app.listen(config.port, () => {
   console.log(`🚀 [Cricket Hub API] Running in ${config.nodeEnv} mode on port ${config.port}`);
+  // Initialize background self-pinger if configured or running on Render
+  initKeepAlive();
 });
 
 // Graceful Shutdown

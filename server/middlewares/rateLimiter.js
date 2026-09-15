@@ -6,6 +6,7 @@ const apiLimiter = rateLimit({
   max: config.rateLimit.maxRequests,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/health' || req.originalUrl?.includes('/health'),
   message: {
     status: 'fail',
     message: 'Too many requests from this IP, please try again after 15 minutes',

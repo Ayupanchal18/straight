@@ -21,3 +21,5 @@ services:
         value: 86400
       - key: RATE_LIMIT_MAX
         value: 300
+      - key: ENABLE_KEEP_ALIVE
+        value: true

@@ -99,14 +99,19 @@ This is a simple Flask web application that provides an API and a user-friendly 
   <br> <img src="scripts/player_comparison.jpg"> <br>
 </ul>
 
-<h2>Update 🚀</h2>
-<p>The API and website have been enhanced with new features and improvements:</p>
-<ul>
-  <li>🎯 Added a user-friendly UI website for interacting with live scores, player stats, schedule, and player comparison.</li>
-  <li>⚡ Optimized the codebase for better performance and reliability.</li>
-  <li>🔄 Rebased and updated to ensure compatibility with the latest dependencies.</li>
-</ul>
-<p>Enjoy the latest version of the Cricket API and website! 🏏</p>
+<h2>24/7 Free Hosting & Zero Cold Starts (Render / Cloud) ⚡</h2>
+<p>To prevent Render's free tier from sleeping after 15 minutes of inactivity and ensure instant response times:</p>
+<ol>
+  <li><strong>Automatic Self-Pinger:</strong> The server automatically pings its public URL every 14 minutes when deployed on Render or when <code>KEEP_ALIVE_URL</code> is set.</li>
+  <li><strong>External Monitor (Guaranteed 24/7 Uptime):</strong>
+    <ul>
+      <li>Create a free account on <a href="https://uptimerobot.com" target="_blank">UptimeRobot</a> or <a href="https://cron-job.org" target="_blank">cron-job.org</a>.</li>
+      <li>Create an HTTP monitor pointing to your Render health endpoint: <code>https://&lt;your-app-name&gt;.onrender.com/health</code></li>
+      <li>Set the interval to <strong>every 10 minutes</strong>.</li>
+      <li>The health endpoint bypasses rate limiters and returns lightweight JSON without hitting database bottlenecks.</li>
+    </ul>
+  </li>
+</ol>
 
 <H2>Disclaimer ⚠️</H2>
-This project is strictly for educational purposes. Not intended for production use. The frontend HTML was generated using GPT
+This project is strictly for educational purposes. Not intended for production use.

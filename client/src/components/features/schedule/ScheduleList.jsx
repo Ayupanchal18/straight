@@ -75,6 +75,7 @@ export const ScheduleList = () => {
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-md hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
                 title="Clear search"
+                aria-label="Clear search"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -87,6 +88,8 @@ export const ScheduleList = () => {
             onClick={fetchSchedule}
             loading={loading}
             icon={RefreshCw}
+            aria-label="Refresh upcoming match schedule"
+            title="Refresh upcoming match schedule"
           >
             <span className="hidden sm:inline">Refresh</span>
           </Button>

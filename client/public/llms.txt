@@ -1,0 +1,22 @@
+# CricketHub
+
+> Real-time live cricket scores, ball-by-ball commentary, match schedules, ICC player rankings, comprehensive career statistics, and head-to-head player comparisons.
+
+## Core Features & Sections
+
+- [Live Cricket Scores](https://cricket-hub-0gc4.onrender.com/?tab=live): Real-time live scores, ball-by-ball commentary, batting partnerships, and miniscores for international and league cricket matches.
+- [Upcoming Match Schedules](https://cricket-hub-0gc4.onrender.com/?tab=schedule): Timetable of bilateral tours, upcoming series, ICC tournaments, venues, and starting times.
+- [Player Statistics & Profiles](https://cricket-hub-0gc4.onrender.com/?tab=players): Detailed career batting averages, strike rates, bowling figures, and personal records for over 1,190+ verified international cricket players.
+- [Head-to-Head Player Comparison](https://cricket-hub-0gc4.onrender.com/?tab=compare): Side-by-side performance analytics, radar charts, and format-by-format breakdowns across Test, ODI, T20I, and IPL matches.
+
+## API Documentation & Endpoints
+
+- [Live Scores API](https://cricket-hub-0gc4.onrender.com/api/live): JSON feed of current live and completed matches.
+- [Upcoming Schedules API](https://cricket-hub-0gc4.onrender.com/api/schedule): JSON list of upcoming cricket fixtures.
+- [Player Profiles API](https://cricket-hub-0gc4.onrender.com/api/players/viratkohli): JSON career statistics and biographical data.
+- [XML Sitemap](https://cricket-hub-0gc4.onrender.com/sitemap.xml): Machine-readable index of all site pages and player profiles.
+- [Robots Directives](https://cricket-hub-0gc4.onrender.com/robots.txt): Search engine crawler directives.
+
+## Optional & Extended Details
+
+- [Full Documentation](https://cricket-hub-0gc4.onrender.com/llms-full.txt): Extended platform architecture and statistical model.

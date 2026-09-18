@@ -1,0 +1,23 @@
+# CricketHub — Full Platform Reference
+
+> An enterprise cricket intelligence platform offering real-time live ball-by-ball commentary, career stats across formats, player comparisons, and automated fixture tracking.
+
+## Overview
+CricketHub provides real-time cricket data aggregation from authoritative international sources. The platform includes:
+- Live match tracking with dynamic miniscore cards, partnership analysis, and recent over progressions.
+- Comprehensive career profiles across Test, ODI, T20I, and domestic/T20 leagues (IPL, BBL, CPL, PSL).
+- Multi-dimensional radar charts for head-to-head player comparison.
+- Verified registry of over 1,190+ international cricket players.
+
+## Canonical Web URLs
+- [Home & Live Scores](https://cricket-hub-0gc4.onrender.com/?tab=live)
+- [Match Fixtures & Timetable](https://cricket-hub-0gc4.onrender.com/?tab=schedule)
+- [Player Search & Analytics](https://cricket-hub-0gc4.onrender.com/?tab=players)
+- [Player Comparison](https://cricket-hub-0gc4.onrender.com/?tab=compare)
+
+## JSON API Reference
+- `GET /api/live`: Real-time array of active, upcoming, and completed matches.
+- `GET /api/schedule`: Comprehensive schedule of international and league fixtures.
+- `GET /api/players/:name`: Career statistics, biographical info, and ICC rankings for any player.
+- `GET /api/players/compare/:p1/:p2`: Side-by-side JSON comparison of two players across all formats.
+- `GET /sitemap.xml`: Complete search engine sitemap containing 1,193+ player profile URLs.

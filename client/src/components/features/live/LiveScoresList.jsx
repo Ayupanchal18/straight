@@ -251,6 +251,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-md hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
                 title="Clear search"
+                aria-label="Clear search"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -264,6 +265,8 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
             onClick={refresh}
             loading={loading}
             icon={RefreshCw}
+            aria-label="Refresh live scores"
+            title="Refresh live scores"
             className="flex-shrink-0"
           >
             <span className="hidden sm:inline">Refresh</span>
@@ -274,6 +277,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
             type="button"
             onClick={toggleTrending}
             title={showTrending ? "Hide Trending section" : "Show Trending section"}
+            aria-label={showTrending ? "Hide Trending section" : "Show Trending section"}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex-shrink-0 ${
               showTrending
                 ? 'bg-slate-900/80 border-white/10 text-slate-300 hover:text-white hover:bg-slate-800/80 hover:border-white/20'
@@ -329,6 +333,8 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
               <button 
                 onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))}
                 className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Previous Day"
+                aria-label="Previous Day"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
@@ -339,6 +345,8 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
               <button 
                 onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))}
                 className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Next Day"
+                aria-label="Next Day"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>

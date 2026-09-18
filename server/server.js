@@ -138,6 +138,74 @@ Sitemap: ${protocol}://${host}/sitemap.xml
   res.status(200).send(content);
 });
 
+// LLM Crawler File (llms.txt specification)
+app.get('/llms.txt', (req, res) => {
+  const host = req.get('host');
+  const protocol = req.protocol;
+  const baseUrl = `${protocol}://${host}`;
+
+  const content = `# CricketHub
+
+> Real-time live cricket scores, ball-by-ball commentary, match schedules, ICC player rankings, comprehensive career statistics, and head-to-head player comparisons.
+
+## Core Features & Sections
+
+- [Live Cricket Scores](${baseUrl}/?tab=live): Real-time live scores, ball-by-ball commentary, batting partnerships, and miniscores for international and league cricket matches.
+- [Upcoming Match Schedules](${baseUrl}/?tab=schedule): Timetable of bilateral tours, upcoming series, ICC tournaments, venues, and starting times.
+- [Player Statistics & Profiles](${baseUrl}/?tab=players): Detailed career batting averages, strike rates, bowling figures, and personal records for over 1,190+ verified international cricket players.
+- [Head-to-Head Player Comparison](${baseUrl}/?tab=compare): Side-by-side performance analytics, radar charts, and format-by-format breakdowns across Test, ODI, T20I, and IPL matches.
+
+## API Documentation & Endpoints
+
+- [Live Scores API](${baseUrl}/api/live): JSON feed of current live and completed matches.
+- [Upcoming Schedules API](${baseUrl}/api/schedule): JSON list of upcoming cricket fixtures.
+- [Player Profiles API](${baseUrl}/api/players/viratkohli): JSON career statistics and biographical data.
+- [XML Sitemap](${baseUrl}/sitemap.xml): Machine-readable index of all site pages and player profiles.
+- [Robots Directives](${baseUrl}/robots.txt): Search engine crawler directives.
+
+## Optional & Extended Details
+
+- [Full Documentation](${baseUrl}/llms-full.txt): Extended platform architecture and statistical model.
+`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.status(200).send(content);
+});
+
+app.get('/llms-full.txt', (req, res) => {
+  const host = req.get('host');
+  const protocol = req.protocol;
+  const baseUrl = `${protocol}://${host}`;
+
+  const content = `# CricketHub — Full Platform Reference
+
+> An enterprise cricket intelligence platform offering real-time live ball-by-ball commentary, career stats across formats, player comparisons, and automated fixture tracking.
+
+## Overview
+CricketHub provides real-time cricket data aggregation from authoritative international sources. The platform includes:
+- Live match tracking with dynamic miniscore cards, partnership analysis, and recent over progressions.
+- Comprehensive career profiles across Test, ODI, T20I, and domestic/T20 leagues (IPL, BBL, CPL, PSL).
+- Multi-dimensional radar charts for head-to-head player comparison.
+- Verified registry of over 1,190+ international cricket players.
+
+## Canonical Web URLs
+- [Home & Live Scores](${baseUrl}/?tab=live)
+- [Match Fixtures & Timetable](${baseUrl}/?tab=schedule)
+- [Player Search & Analytics](${baseUrl}/?tab=players)
+- [Player Comparison](${baseUrl}/?tab=compare)
+
+## JSON API Reference
+- \`GET /api/live\`: Real-time array of active, upcoming, and completed matches.
+- \`GET /api/schedule\`: Comprehensive schedule of international and league fixtures.
+- \`GET /api/players/:name\`: Career statistics, biographical info, and ICC rankings for any player.
+- \`GET /api/players/compare/:p1/:p2\`: Side-by-side JSON comparison of two players across all formats.
+- \`GET /sitemap.xml\`: Complete search engine sitemap containing 1,193+ player profile URLs.
+`;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.status(200).send(content);
+});
+
 // Apply general rate limiter to API
 app.use('/api', apiLimiter);
 

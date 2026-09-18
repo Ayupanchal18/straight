@@ -7,7 +7,7 @@ import {
   CloudSun, 
   ExternalLink 
 } from 'lucide-react';
-import { TeamBadge, isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
+import { TeamBadge, isMatchLive, isMatchComplete, isMatchUpcoming, getMatchVenue } from '../../../utils/teamUtils.jsx';
 import { useFavorites } from '../../../context/FavoritesContext';
 
 export const MatchCard = ({ match, onSelectMatch }) => {
@@ -29,8 +29,8 @@ export const MatchCard = ({ match, onSelectMatch }) => {
   const isBattingT1 = isLive && match.currentBattingTeamId && match.currentBattingTeamId === match.team1Id;
   const isBattingT2 = isLive && match.currentBattingTeamId && match.currentBattingTeamId === match.team2Id;
 
-  // Derive venue fallback or city
-  const venueDisplay = match.venue || 'Lord\'s, London';
+  // Derive venue dynamically from match data, series context, or home team
+  const venueDisplay = getMatchVenue(match);
 
   return (
     <div 

@@ -10,7 +10,7 @@ import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import cricketApi from '../../../services/api';
 import { useFavorites } from '../../../context/FavoritesContext';
-import { TeamBadge, getTeamTheme, isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
+import { TeamBadge, getTeamTheme, isMatchLive, isMatchComplete, isMatchUpcoming, getMatchVenue } from '../../../utils/teamUtils.jsx';
 
 export const MatchDetailModal = ({ match, onClose }) => {
   const [details, setDetails] = useState(null);
@@ -29,17 +29,20 @@ export const MatchDetailModal = ({ match, onClose }) => {
     setError(null);
     try {
       const res = await cricketApi.getMatchDetails(match.cricbuzzLink);
-      if (res?.data) {
+      if (res && res.data) {
         setDetails(res.data);
       }
     } catch (err) {
-      setError(err.message || 'Could not fetch match details.');
+      console.warn('Live match details fallback:', err.message);
+      setError(err.message || 'Details currently loading...');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchDetails(); }, [match]);
+  useEffect(() => {
+    fetchDetails();
+  }, [match.cricbuzzLink]);
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -60,8 +63,8 @@ export const MatchDetailModal = ({ match, onClose }) => {
     togglePinMatch(match);
   };
 
-  // Derive venue and weather
-  const venueDisplay = details?.venue?.name || match.venue || 'R. Premadasa Stadium, Colombo';
+  // Derive venue dynamically from match details, structured data, or series context
+  const venueDisplay = getMatchVenue(details || match);
   const weatherDisplay = '28°C';
 
   // Team names and short names
@@ -124,21 +127,47 @@ export const MatchDetailModal = ({ match, onClose }) => {
   const currentBattingTeamName = isTeam1Batting ? t1Name : t2Name;
   const currentBattingScoreDisplay = isTeam1Batting ? `${t1Score} ${t1Overs}` : `${t2Score} ${t2Overs}`;
 
-  // Live Chase & HUD metrics
-  const target = details?.target || match.target || (innScores[0]?.score ? innScores[0].score + 1 : null);
-  const currentBattingScore = innScores[1]?.score || (match.currentBattingTeamId === match.team1Id ? innScores[0]?.score : innScores[1]?.score) || 0;
-  const requiredRuns = details?.requiredRuns || (target && currentBattingScore !== undefined ? Math.max(0, target - currentBattingScore) : null);
-  
-  const currentOvers = details?.currentInnings?.overs || match.team2Overs || match.team1Overs || 0;
-  const currentBalls = Math.floor(currentOvers) * 6 + Math.round((currentOvers - Math.floor(currentOvers)) * 10);
+  // Match Format evaluation
   const matchFormatString = `${details?.matchFormat || ''} ${match.matchFormat || ''} ${match.matchType || ''} ${match.header || ''} ${details?.matchDescription || ''}`.toLowerCase();
   const isTestMatch = matchFormatString.includes('test') || matchFormatString.includes('four-day') || matchFormatString.includes('three-day') || matchFormatString.includes('first-class') || matchFormatString.includes('fc');
   const isT20 = matchFormatString.includes('t20');
-  const maxBalls = isT20 ? 120 : (isTestMatch ? null : 300);
-  const ballsRemaining = details?.ballsRemaining || (target && maxBalls ? Math.max(0, maxBalls - currentBalls) : null);
-  
-  const crr = details?.currentInnings?.currentRunRate || match.currentRunRate || '5.80';
-  const rrr = details?.currentInnings?.requiredRunRate || (requiredRuns && ballsRemaining && ballsRemaining > 0 ? ((requiredRuns / ballsRemaining) * 6).toFixed(2) : null);
+  const maxOvers = isT20 ? 20 : (isTestMatch ? null : 50);
+  const maxBalls = maxOvers ? maxOvers * 6 : null;
+
+  // Innings identification & Chase evaluation
+  // Innings 1: Only 1 team has batted / is batting and no target is set
+  // Innings 2 (Chase): 2nd innings in limited overs match or explicit target exists
+  const currentInningsId = details?.currentInnings?.inningsId || (innScores.length > 0 ? innScores.length : 1);
+  const isSecondInnings = (innScores.length >= 2) || (currentInningsId === 2) || Boolean(details?.target || match.target);
+  const isChase = !isTestMatch && isSecondInnings && Boolean(details?.target || match.target || (innScores.length >= 2 && innScores[0]?.score));
+
+  // Target and required runs ONLY apply during 2nd innings (chase)
+  const target = isChase ? (details?.target || match.target || (innScores[0]?.score ? innScores[0].score + 1 : null)) : null;
+  const currentBattingScore = isChase 
+    ? (innScores[1]?.score ?? (isTeam1Batting ? t1LatestInnings?.score : t2LatestInnings?.score) ?? 0) 
+    : ((isTeam1Batting ? t1LatestInnings?.score : t2LatestInnings?.score) ?? innScores[0]?.score ?? 0);
+  const requiredRuns = isChase && target !== null ? (details?.requiredRuns ?? Math.max(0, target - currentBattingScore)) : null;
+
+  const currentOversNum = parseFloat(details?.currentInnings?.overs || (isTeam1Batting ? t1LatestInnings?.overs : t2LatestInnings?.overs) || 0) || 0;
+  const currentOversFloor = Math.floor(currentOversNum);
+  const currentBalls = currentOversFloor * 6 + Math.round((currentOversNum - currentOversFloor) * 10);
+  const ballsRemaining = maxBalls ? Math.max(0, maxBalls - currentBalls) : null;
+  const oversRemaining = ballsRemaining !== null ? `${Math.floor(ballsRemaining / 6)}.${ballsRemaining % 6}` : null;
+
+  const currentRuns = currentBattingScore || 0;
+  const crr = details?.currentInnings?.currentRunRate 
+    ? String(details.currentInnings.currentRunRate)
+    : (match.currentRunRate ? String(match.currentRunRate) : (currentBalls > 0 ? ((currentRuns / currentBalls) * 6).toFixed(2) : '–'));
+
+  const rrr = isChase && requiredRuns !== null && ballsRemaining && ballsRemaining > 0
+    ? ((requiredRuns / ballsRemaining) * 6).toFixed(2)
+    : (details?.currentInnings?.requiredRunRate ? String(details.currentInnings.requiredRunRate) : null);
+
+  // Projected scores for 1st innings
+  const crrNum = parseFloat(crr) || (currentBalls > 0 ? (currentRuns / currentBalls) * 6 : 6.0);
+  const projectedAtCRR = maxBalls && ballsRemaining !== null ? Math.round(currentRuns + (crrNum * ballsRemaining) / 6) : null;
+  const projectedAt6 = maxBalls && ballsRemaining !== null ? Math.round(currentRuns + (6.0 * ballsRemaining) / 6) : null;
+  const projectedAt8 = maxBalls && ballsRemaining !== null ? Math.round(currentRuns + (8.0 * ballsRemaining) / 6) : null;
 
   // Recent Balls Array
   const recentBalls = details?.recentBalls?.length > 0 
@@ -187,8 +216,8 @@ export const MatchDetailModal = ({ match, onClose }) => {
 
   // Status line
   const matchStatusText = details?.status || match.status || (
-    target && requiredRuns && ballsRemaining
-      ? `${t1Name} need ${requiredRuns} runs in ${ballsRemaining} balls`
+    isChase && target && requiredRuns !== null && ballsRemaining !== null
+      ? `${currentBattingTeamName} need ${requiredRuns} runs in ${ballsRemaining} balls`
       : 'Match in progress'
   );
 
@@ -312,7 +341,20 @@ export const MatchDetailModal = ({ match, onClose }) => {
 
               {/* Team 2 (Right) */}
               <div className="md:col-span-5 flex items-center justify-between md:justify-end gap-3 text-left md:text-right">
-                <div className="flex flex-col items-start md:items-end order-2 md:order-1 min-w-0">
+                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 order-1 md:order-2">
+                  <div className="md:hidden flex-shrink-0">
+                    <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
+                  </div>
+                  <div className="min-w-0 md:text-right">
+                    <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">{t2Name}</h3>
+                    <span className="text-[11px] sm:text-xs text-slate-400 font-bold block">{t2Short}</span>
+                  </div>
+                  <div className="hidden md:block flex-shrink-0">
+                    <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end flex-shrink-0 text-right order-2 md:order-1 ml-auto md:ml-0">
                   <div className="flex items-baseline md:justify-end gap-1.5">
                     <span className="text-xl sm:text-2xl md:text-3xl font-black text-white tabular-nums tracking-tight">
                       {t2Score}
@@ -323,14 +365,6 @@ export const MatchDetailModal = ({ match, onClose }) => {
                       </span>
                     )}
                   </div>
-                </div>
-
-                <div className="flex items-center gap-2.5 sm:gap-3.5 order-1 md:order-2 flex-shrink-0">
-                  <div className="min-w-0 md:text-right">
-                    <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">{t2Name}</h3>
-                    <span className="text-[11px] sm:text-xs text-slate-400 font-bold block">{t2Short}</span>
-                  </div>
-                  <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
                 </div>
               </div>
 
@@ -345,31 +379,31 @@ export const MatchDetailModal = ({ match, onClose }) => {
           </div>
 
           {/* ── Sub-Navigation Tabs ── */}
-          <div className="flex items-center gap-1 sm:gap-2 border-b border-white/10 pb-1 overflow-x-auto no-scrollbar">
+          <div className="grid grid-cols-3 sm:flex items-center gap-1 sm:gap-2 border-b border-white/10 pb-1">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
                 activeTab === 'overview'
                   ? 'border-emerald-400 text-emerald-400'
                   : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
-              <Zap className="w-3.5 h-3.5" />
+              <Zap className="w-3.5 h-3.5 flex-shrink-0" />
               <span>Overview</span>
             </button>
 
             <button
               onClick={() => setActiveTab('scorecard')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
                 activeTab === 'scorecard'
                   ? 'border-emerald-400 text-emerald-400'
                   : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
-              <ListFilter className="w-3.5 h-3.5" />
+              <ListFilter className="w-3.5 h-3.5 flex-shrink-0" />
               <span>Scorecard</span>
               {scorecards.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-slate-800 text-slate-300 border border-white/10">
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-800 text-slate-300 border border-white/10">
                   {scorecards.length}
                 </span>
               )}
@@ -377,15 +411,15 @@ export const MatchDetailModal = ({ match, onClose }) => {
 
             <button
               onClick={() => setActiveTab('commentary')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
                 activeTab === 'commentary'
                   ? 'border-emerald-400 text-emerald-400'
                   : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
-              <MessageSquare className="w-3.5 h-3.5" />
+              <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
               <span>Commentary</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-slate-800 text-slate-300 border border-white/10">
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-800 text-slate-300 border border-white/10">
                 {commentaryCount}
               </span>
             </button>
@@ -395,33 +429,59 @@ export const MatchDetailModal = ({ match, onClose }) => {
           {activeTab === 'overview' && (
             <div className="space-y-3.5 sm:space-y-4">
               
-              {/* 5-Column Live Chase HUD Metric Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-2.5">
-                <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">TARGET</span>
-                  <span className="text-base sm:text-lg md:text-xl font-black text-amber-400 tabular-nums">{target || '–'}</span>
-                </div>
+              {/* Live Chase HUD (2nd Innings) or Match Projection HUD (1st Innings) */}
+              {isChase ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-2.5">
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">TARGET</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-amber-400 tabular-nums">{target}</span>
+                  </div>
 
-                <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">REQUIRED RUNS</span>
-                  <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">{requiredRuns ?? '–'}</span>
-                </div>
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">REQUIRED RUNS</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">{requiredRuns ?? '–'}</span>
+                  </div>
 
-                <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">BALLS LEFT</span>
-                  <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">{ballsRemaining ?? '–'}</span>
-                </div>
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">BALLS LEFT</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">{ballsRemaining ?? '–'}</span>
+                  </div>
 
-                <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">CRR</span>
-                  <span className="text-base sm:text-lg md:text-xl font-black text-emerald-400 tabular-nums">{crr || '–'}</span>
-                </div>
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">CRR</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-emerald-400 tabular-nums">{crr || '–'}</span>
+                  </div>
 
-                <div className="col-span-2 sm:col-span-2 md:col-span-1 rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">RRR</span>
-                  <span className="text-base sm:text-lg md:text-xl font-black text-rose-400 tabular-nums">{rrr || '–'}</span>
+                  <div className="col-span-2 sm:col-span-2 md:col-span-1 rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">RRR</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-rose-400 tabular-nums">{rrr || '–'}</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">CURRENT RR (CRR)</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-emerald-400 tabular-nums">{crr || '–'}</span>
+                  </div>
+
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">OVERS LEFT</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">
+                      {oversRemaining ? `${oversRemaining} ov` : (ballsRemaining !== null ? `${ballsRemaining} b` : '–')}
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">PROJECTED (AT CRR)</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-amber-400 tabular-nums">{projectedAtCRR || '–'}</span>
+                  </div>
+
+                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">PROJECTED (6.0 RPO)</span>
+                    <span className="text-base sm:text-lg md:text-xl font-black text-sky-300 tabular-nums">{projectedAt6 || '–'}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Match Flow: Recent Overs Strip + Partnership + Last Wicket */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2.5 sm:gap-3 items-stretch">
@@ -489,7 +549,7 @@ export const MatchDetailModal = ({ match, onClose }) => {
                     <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">At the Crease</span>
                   </div>
                   <span className="text-[10px] sm:text-xs font-bold text-slate-400 truncate max-w-[220px] sm:max-w-none">
-                    {currentBattingTeamName} — {currentBattingScoreDisplay} {target ? `| Target ${target}` : ''}
+                    {currentBattingTeamName} — {currentBattingScoreDisplay} {isChase && target ? `| Target ${target}` : ''}
                   </span>
                 </div>
 

@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Search, MapPin, Clock, RefreshCw, AlertCircle, Trophy, Globe } from 'lucide-react';
+import { Calendar, Search, X, MapPin, Clock, RefreshCw, AlertCircle, Trophy, Globe } from 'lucide-react';
 import cricketApi from '../../../services/api';
 import { Button } from '../../ui/Button';
 import { Skeleton } from '../../ui/Skeleton';
+import { useSEO } from '../../../hooks/useSEO';
 
 export const ScheduleList = () => {
   const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useSEO({
+    title: 'Upcoming Cricket Match Schedule, International Tours & Fixtures | CricketHub',
+    description: 'Explore upcoming international cricket fixtures, bilateral series timetables, T20 league schedules, match venues, and start times.',
+    keywords: 'cricket schedule, upcoming cricket matches, cricket timetable, cricket fixtures, international tour schedule',
+  });
 
   const fetchSchedule = async () => {
     setLoading(true);
@@ -32,12 +39,8 @@ export const ScheduleList = () => {
   const filtered = schedule.filter(item => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    return (
-      (item.match && item.match.toLowerCase().includes(q)) ||
-      (item.date && item.date.toLowerCase().includes(q)) ||
-      (item.venue && item.venue.toLowerCase().includes(q)) ||
-      (item.fullText && item.fullText.toLowerCase().includes(q))
-    );
+    const fields = [item.match, item.date, item.venue, item.fullText, item.time];
+    return fields.some(f => f && f.toLowerCase().includes(q));
   });
 
   return (
@@ -65,8 +68,17 @@ export const ScheduleList = () => {
               placeholder="Search team or series..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-[#0b101d] border border-white/10 rounded-xl text-xs sm:text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500"
+              className={`w-full pl-9 ${searchQuery ? 'pr-8' : 'pr-3'} py-1.5 bg-[#0b101d] border border-white/10 rounded-xl text-xs sm:text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-emerald-500`}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-md hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
 
           <Button

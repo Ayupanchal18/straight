@@ -21,11 +21,29 @@ const POPULAR_PLAYERS = [
   { name: 'Kane Williamson', country: 'New Zealand' }
 ];
 
+import { useSEO } from '../../../hooks/useSEO';
+import { generatePlayerSchema } from '../../../utils/seo';
+
 export const PlayerSearch = ({ initialQuery = '', onCompare }) => {
   const [query, setQuery] = useState(initialQuery || 'Virat Kohli');
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Dynamic SEO & Athlete Schema for the currently viewed player
+  useSEO({
+    title: player?.name 
+      ? `${player.name} (${player.country}) Career Stats, ICC Rankings, Batting & Bowling Records | CricketHub`
+      : 'Cricket Player Search & Career Statistics Analytics | CricketHub',
+    description: player?.name 
+      ? `Comprehensive career statistics for ${player.name} (${player.country}). Batting average, bowling economy, strike rates, centuries, and ICC rankings.`
+      : 'Search cricket players, explore comprehensive career batting averages, bowling records, ICC rankings, centuries, and recent form.',
+    keywords: player?.name 
+      ? `${player.name}, ${player.name} stats, ${player.name} career records, ${player.country} cricket, ${player.name} rankings`
+      : 'cricket player stats, cricket career records, icc rankings, batting averages',
+    structuredData: player ? generatePlayerSchema(player) : null,
+    ogImage: player?.image || undefined,
+  });
 
   const searchPlayer = async (targetName) => {
     const q = (targetName || query).trim();

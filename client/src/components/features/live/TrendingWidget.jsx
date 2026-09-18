@@ -1,8 +1,8 @@
 import React from 'react';
-import { Flame, ChevronRight, Activity } from 'lucide-react';
+import { Flame, ChevronRight, Activity, X } from 'lucide-react';
 import { TeamBadge, isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
 
-export const TrendingWidget = ({ matches = [], onSelectMatch }) => {
+export const TrendingWidget = ({ matches = [], onSelectMatch, onClose }) => {
   // Take top 5 trending / marquee matches
   const trendingList = matches.slice(0, 5);
 
@@ -15,6 +15,16 @@ export const TrendingWidget = ({ matches = [], onSelectMatch }) => {
             Trending
           </h3>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            title="Hide trending section"
+            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 border border-transparent hover:border-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="space-y-2.5">

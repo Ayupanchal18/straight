@@ -58,6 +58,86 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Dynamic XML Sitemap Generator (Indexing all core routes and 1,100+ player profiles)
+app.get('/sitemap.xml', (req, res) => {
+  try {
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const baseUrl = `${protocol}://${host}`;
+
+    let playerKeys = [];
+    const registryPath = path.join(__dirname, 'data/playerRegistry.json');
+    if (fs.existsSync(registryPath)) {
+      const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+      playerKeys = Object.keys(registry);
+    }
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Core Views -->
+  <url>
+    <loc>${baseUrl}/</loc>
+    <changefreq>always</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/?tab=live</loc>
+    <changefreq>always</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/?tab=schedule</loc>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/?tab=players</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/?tab=compare</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/?tab=favorites</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Player Profiles (${playerKeys.length} verified players) -->
+${playerKeys.map(k => `  <url>
+    <loc>${baseUrl}/?tab=players&amp;player=${encodeURIComponent(k)}</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>`).join('\n')}
+</urlset>`;
+
+    res.setHeader('Content-Type', 'application/xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.status(200).send(xml);
+  } catch (err) {
+    res.status(500).send('Error generating sitemap');
+  }
+});
+
+// Search Engine Robots.txt
+app.get('/robots.txt', (req, res) => {
+  const host = req.get('host');
+  const protocol = req.protocol;
+  const content = `User-agent: *
+Allow: /
+Disallow: /api/admin/
+Disallow: /node_modules/
+
+Sitemap: ${protocol}://${host}/sitemap.xml
+`;
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.status(200).send(content);
+});
+
 // Apply general rate limiter to API
 app.use('/api', apiLimiter);
 

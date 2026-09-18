@@ -12,51 +12,36 @@ const client = axios.create({
   httpsAgent,
   timeout: 10000,
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
   },
 });
 
-// Comprehensive lookup registry for popular international & IPL players
-const POPULAR_PLAYER_MAP = {
-  'viratkohli': 'https://www.cricbuzz.com/profiles/1413/virat-kohli',
-  'rohitsharma': 'https://www.cricbuzz.com/profiles/576/rohit-sharma',
-  'msdhoni': 'https://www.cricbuzz.com/profiles/265/ms-dhoni',
-  'jaspritbumrah': 'https://www.cricbuzz.com/profiles/9311/jasprit-bumrah',
-  'stevesmith': 'https://www.cricbuzz.com/profiles/2250/steve-smith',
-  'patcummins': 'https://www.cricbuzz.com/profiles/8095/pat-cummins',
-  'babarazam': 'https://www.cricbuzz.com/profiles/8359/babar-azam',
-  'joeroot': 'https://www.cricbuzz.com/profiles/8019/joe-root',
-  'travishead': 'https://www.cricbuzz.com/profiles/8733/travis-head',
-  'hardikpandya': 'https://www.cricbuzz.com/profiles/9647/hardik-pandya',
-  'benstokes': 'https://www.cricbuzz.com/profiles/8593/ben-stokes',
-  'rashidkhan': 'https://www.cricbuzz.com/profiles/10738/rashid-khan',
-  'shubmangill': 'https://www.cricbuzz.com/profiles/11813/shubman-gill',
-  'subhmangill': 'https://www.cricbuzz.com/profiles/11813/shubman-gill',
-  'klrahul': 'https://www.cricbuzz.com/profiles/8733/kl-rahul',
-  'rishabhpant': 'https://www.cricbuzz.com/profiles/10744/rishabh-pant',
-  'suryakumaryadav': 'https://www.cricbuzz.com/profiles/7915/suryakumar-yadav',
-  'ravindrajadeja': 'https://www.cricbuzz.com/profiles/587/ravindra-jadeja',
-  'mitchellstarc': 'https://www.cricbuzz.com/profiles/7909/mitchell-starc',
-  'kanewilliamson': 'https://www.cricbuzz.com/profiles/6349/kane-williamson',
-  'shaheenafridi': 'https://www.cricbuzz.com/profiles/12911/shaheen-afridi',
-  'davidwarner': 'https://www.cricbuzz.com/profiles/1739/david-warner',
-  'glennmaxwell': 'https://www.cricbuzz.com/profiles/7662/glenn-maxwell',
-  'yashasvijaiswal': 'https://www.cricbuzz.com/profiles/13945/yashasvi-jaiswal',
-  'kuldeepyadav': 'https://www.cricbuzz.com/profiles/8292/kuldeep-yadav',
-  'mohammedshami': 'https://www.cricbuzz.com/profiles/7985/mohammed-shami',
-  'mohammedsiraj': 'https://www.cricbuzz.com/profiles/10808/mohammed-siraj',
-  'shreyasiyer': 'https://www.cricbuzz.com/profiles/9428/shreyas-iyer',
-  'axarpatel': 'https://www.cricbuzz.com/profiles/8808/axar-patel',
-  'trentboult': 'https://www.cricbuzz.com/profiles/8117/trent-boult',
-  'kagisorabada': 'https://www.cricbuzz.com/profiles/9585/kagiso-rabada',
-  'heinrichklaasen': 'https://www.cricbuzz.com/profiles/10209/heinrich-klaasen',
-  'quindekock': 'https://www.cricbuzz.com/profiles/8520/quinton-de-kock',
-  'quintondekock': 'https://www.cricbuzz.com/profiles/8520/quinton-de-kock',
-  'sachintendulkar': 'https://www.cricbuzz.com/profiles/25/sachin-tendulkar',
-};
+const path = require('path');
+const fs = require('fs');
+
+// Master Player Registry loaded from verified database (1,100+ players & legends)
+let PLAYER_REGISTRY = {};
+try {
+  const registryPath = path.join(__dirname, '../data/playerRegistry.json');
+  if (fs.existsSync(registryPath)) {
+    PLAYER_REGISTRY = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
+  }
+} catch (e) {
+  console.warn('[ScraperService] Could not load playerRegistry.json:', e.message);
+}
+
+/**
+ * Dynamically register a player profile in the runtime registry
+ */
+function registerPlayerProfile(name, url) {
+  if (!name || !url) return;
+  const cleanKey = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (cleanKey.length >= 3) {
+    PLAYER_REGISTRY[cleanKey] = url;
+  }
+}
 
 /**
  * Accurately classify match as Live, Upcoming, or Completed
@@ -118,7 +103,7 @@ function evaluateMatchState(m, header = {}, mini = {}) {
  */
 async function scrapeLiveMatches() {
   try {
-    const url = 'https://www.cricbuzz.com/cricket-match/live-scores';
+    const url = 'https://m.cricbuzz.com/cricket-match/live-scores';
     const { data: html } = await client.get(url);
     const $ = cheerio.load(html);
 
@@ -685,16 +670,28 @@ async function scrapeMatchDetails(matchUrl) {
     }
   }
 
-  // 2. Enrich with venue from HTML SportsEvent structured data
+  // 2. Enrich with venue from HTML Place/SportsEvent structured data
   try {
     const { data: html } = await client.get(matchUrl);
     const $ = cheerio.load(html);
     $('script[type="application/ld+json"]').each((_, s) => {
       try {
         const json = JSON.parse($(s).html());
-        if ((json['@type'] === 'SportsEvent' || json.competitor) && json.location) {
+        if (json['@type'] === 'Place' && json.name) {
           results.venue = {
-            name: json.location.name || '',
+            name: json.name,
+            city: json.address?.addressLocality || '',
+            country: json.address?.addressCountry || '',
+          };
+        } else if (json.location && json.location.name) {
+          results.venue = {
+            name: json.location.name,
+            city: json.location.address?.addressLocality || '',
+            country: json.location.address?.addressCountry || '',
+          };
+        } else if ((json['@type'] === 'SportsEvent' || json.competitor) && json.location) {
+          results.venue = {
+            name: typeof json.location === 'string' ? json.location : json.location.name || '',
             city: json.location.address?.addressLocality || '',
             country: json.location.address?.addressCountry || '',
           };
@@ -716,7 +713,7 @@ async function scrapeMatchDetails(matchUrl) {
  */
 async function scrapeSchedule() {
   try {
-    const url = 'https://www.cricbuzz.com/cricket-schedule/upcoming-series/international';
+    const url = 'https://m.cricbuzz.com/cricket-schedule/upcoming-series/international';
     const { data: html } = await client.get(url);
     const $ = cheerio.load(html);
 
@@ -777,44 +774,32 @@ async function scrapeSchedule() {
  * Search Cricbuzz Player Profile URL
  */
 async function searchPlayerProfileUrl(playerName) {
+  if (!playerName) return null;
   const cleanKey = playerName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // 1. Direct registry hit
-  if (POPULAR_PLAYER_MAP[cleanKey]) {
-    return POPULAR_PLAYER_MAP[cleanKey];
+  if (PLAYER_REGISTRY[cleanKey]) {
+    return PLAYER_REGISTRY[cleanKey];
   }
 
-  // 2. Partial matches in registry
-  for (const [key, url] of Object.entries(POPULAR_PLAYER_MAP)) {
-    if (cleanKey.includes(key) || key.includes(cleanKey)) {
+  // 2. Token / surname / word match
+  const parts = playerName.toLowerCase().trim().split(/\s+/);
+  for (const part of parts) {
+    const cleanPart = part.replace(/[^a-z0-9]/g, '');
+    if (cleanPart.length >= 4 && PLAYER_REGISTRY[cleanPart]) {
+      return PLAYER_REGISTRY[cleanPart];
+    }
+  }
+
+  // 3. Partial substring match in registry (only if key has sufficient length)
+  for (const [key, url] of Object.entries(PLAYER_REGISTRY)) {
+    if (key.length >= 5 && (cleanKey.includes(key) || key.includes(cleanKey))) {
       return url;
     }
   }
 
-  // 3. Fallback DuckDuckGo search
-  try {
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:cricbuzz.com/profiles/ ' + playerName)}`;
-    const { data: duckHtml } = await client.get(searchUrl);
-    const $ = cheerio.load(duckHtml);
-
-    let profileUrl = null;
-    $('a.result__url, a.result__snippet, .result__title a').each((_, a) => {
-      const href = $(a).attr('href') || '';
-      if (href.includes('cricbuzz.com/profiles/')) {
-        const match = href.match(/uddg=([^&]+)/);
-        profileUrl = match ? decodeURIComponent(match[1]) : href;
-        return false;
-      }
-    });
-
-    if (profileUrl) return profileUrl;
-  } catch (err) {
-    console.warn('[Scraper Warning] DDG search error:', err.message);
-  }
-
-  // 4. Default slug fallback for any player
-  const slug = playerName.toLowerCase().replace(/\s+/g, '-');
-  return `https://www.cricbuzz.com/profiles/1413/${slug}`;
+  // 4. Return null if not found
+  return null;
 }
 
 /**
@@ -822,7 +807,24 @@ async function searchPlayerProfileUrl(playerName) {
  */
 async function scrapePlayerProfile(profileUrl, playerNameFallback = '') {
   try {
-    const { data: html } = await client.get(profileUrl);
+    let html = null;
+    const fetchHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+
+    try {
+      const res = await client.get(profileUrl, { headers: fetchHeaders });
+      html = res.data;
+    } catch (fetchErr) {
+      const altUrl = profileUrl.includes('m.cricbuzz.com')
+        ? profileUrl.replace('m.cricbuzz.com', 'www.cricbuzz.com')
+        : profileUrl.replace('www.cricbuzz.com', 'm.cricbuzz.com');
+      const res = await client.get(altUrl, { headers: fetchHeaders });
+      html = res.data;
+    }
+
     const $ = cheerio.load(html);
 
     // 1. Extract Name
@@ -830,6 +832,20 @@ async function scrapePlayerProfile(profileUrl, playerNameFallback = '') {
     if (!name || name.length < 2) {
       const title = $('title').text();
       name = title.split('Profile')[0]?.trim() || playerNameFallback;
+    }
+
+    // Name mismatch guard (guarantees wrong players like Faisal Naved are never returned)
+    if (playerNameFallback && name) {
+      const cleanScraped = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanTarget = playerNameFallback.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetParts = playerNameFallback.toLowerCase().split(/\s+/);
+      const isMatch = cleanScraped.includes(cleanTarget) ||
+                      cleanTarget.includes(cleanScraped) ||
+                      targetParts.some(p => p.length >= 4 && cleanScraped.includes(p));
+      if (!isMatch) {
+        console.warn(`[Scraper Warning] Name mismatch: queried "${playerNameFallback}" but profile at ${profileUrl} is "${name}"`);
+        return null;
+      }
     }
 
     // 2. Personal Information
@@ -1066,4 +1082,5 @@ module.exports = {
   scrapeSchedule,
   searchPlayerProfileUrl,
   scrapePlayerProfile,
+  registerPlayerProfile,
 };

@@ -10,13 +10,13 @@ import {
   Moon,
   Newspaper,
   BarChart2,
-  Trophy
+  Trophy,
+  Command
 } from 'lucide-react';
 import { useFavorites } from '../../context/FavoritesContext';
 
-export const Navbar = ({ activeTab, setActiveTab, onGlobalSearch }) => {
+export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
   const { favorites } = useFavorites();
-  const [searchVal, setSearchVal] = useState('');
 
   const navItems = [
     { id: 'live', label: 'Live Scores', icon: Radio, isLive: true },
@@ -26,13 +26,6 @@ export const Navbar = ({ activeTab, setActiveTab, onGlobalSearch }) => {
     { id: 'compare', label: 'H2H Compare', icon: Scale },
     { id: 'favorites', label: 'Watchlist', icon: Bookmark, count: favorites.length },
   ];
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchVal.trim() && onGlobalSearch) {
-      onGlobalSearch(searchVal.trim());
-    }
-  };
 
   return (
     <>
@@ -93,17 +86,28 @@ export const Navbar = ({ activeTab, setActiveTab, onGlobalSearch }) => {
 
             {/* Right Action Tools: Search, Theme, Profile */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {/* Header Search Input */}
-              <form onSubmit={handleSearchSubmit} className="relative hidden sm:block w-48 md:w-60">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Search teams, players..."
-                  value={searchVal}
-                  onChange={(e) => setSearchVal(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-slate-900/90 border border-white/10 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
-                />
-              </form>
+              {/* Search Trigger (Desktop) — opens Command Palette */}
+              <button
+                type="button"
+                onClick={onOpenSearch}
+                className="relative hidden sm:flex items-center gap-2 w-48 md:w-60 px-3 py-1.5 bg-slate-900/90 border border-white/10 rounded-xl text-xs text-slate-400 hover:text-slate-300 hover:border-white/20 transition-colors cursor-pointer group"
+              >
+                <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
+                <span className="flex-1 text-left">Search anything...</span>
+                <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-800/80 border border-white/10 text-[10px] font-bold text-slate-500 font-mono">
+                  Ctrl K
+                </kbd>
+              </button>
+
+              {/* Search Icon (Mobile) — opens Command Palette */}
+              <button
+                type="button"
+                onClick={onOpenSearch}
+                className="sm:hidden p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+                title="Search (Ctrl+K)"
+              >
+                <Search className="w-4 h-4" />
+              </button>
 
               {/* Dark/Light toggle placeholder */}
               <button 
@@ -159,3 +163,4 @@ export const Navbar = ({ activeTab, setActiveTab, onGlobalSearch }) => {
     </>
   );
 };
+

@@ -5,6 +5,7 @@ import { Button } from '../../ui/Button';
 import { Skeleton } from '../../ui/Skeleton';
 import { TeamBadge } from '../../../utils/teamUtils.jsx';
 import { StatRadarChart } from '../players/StatRadarChart';
+import { useSEO } from '../../../hooks/useSEO';
 
 export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 = 'Rohit Sharma' }) => {
   const [player1Name, setPlayer1Name] = useState(defaultPlayer1);
@@ -14,6 +15,14 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
   const [error, setError] = useState(null);
   const [format, setFormat] = useState('odi'); // 'test', 'odi', 't20', 'ipl'
   const [mode, setMode] = useState('batting'); // 'batting', 'bowling'
+
+  useSEO({
+    title: player1Name && player2Name 
+      ? `${player1Name} vs ${player2Name} Head-to-Head Cricket Stats Comparison | CricketHub`
+      : 'Compare Cricket Players Head to Head | CricketHub',
+    description: `Side-by-side batting & bowling career analytics comparing ${player1Name} and ${player2Name}. Batting averages, strike rates, centuries, economy rates, and radar visualizer.`,
+    keywords: `${player1Name} vs ${player2Name}, cricket player comparison, head to head stats, cricket analytics`,
+  });
 
   const handleCompare = async (p1 = player1Name, p2 = player2Name) => {
     if (!p1.trim() || !p2.trim()) return;

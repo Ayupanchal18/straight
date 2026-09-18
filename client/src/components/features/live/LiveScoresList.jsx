@@ -2,13 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { 
   RefreshCw, 
   Radio, 
-  Search, 
+  Search,
+  X, 
   ChevronLeft, 
   ChevronRight, 
   Calendar as CalendarIcon,
   AlertCircle, 
   Flame,
-  ChevronDown
+  ChevronDown,
+  PanelRightClose,
+  PanelRightOpen
 } from 'lucide-react';
 import { useLiveScores } from '../../../hooks/useLiveScores';
 import { useFavorites } from '../../../context/FavoritesContext';
@@ -22,13 +25,49 @@ import { Button } from '../../ui/Button';
 import { Skeleton } from '../../ui/Skeleton';
 import { isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
 
-export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
-  const { matches, loading, error, lastUpdated, refresh } = useLiveScores(30000, true);
+import { useSEO } from '../../../hooks/useSEO';
+import { generateMatchSchema } from '../../../utils/seo';
+
+export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }) => {
+  // Use shared live scores from App if available, otherwise fallback to own hook
+  const ownHook = useLiveScores(30000, !sharedLiveScores);
+  const { matches, loading, error, lastUpdated, refresh } = sharedLiveScores || ownHook;
   const { pinnedMatchId, unpinMatch, favorites } = useFavorites();
   const [filter, setFilter] = useState('all'); // all, live, upcoming, international, t20, completed
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // Dynamic SEO & SportsEvent Schema for the live matches view
+  const featuredLiveMatch = matches.find(m => isMatchLive(m)) || matches[0];
+  useSEO({
+    title: featuredLiveMatch
+      ? `LIVE: ${featuredLiveMatch.team1} vs ${featuredLiveMatch.team2} (${featuredLiveMatch.status || 'Live Scores'}) | CricketHub`
+      : 'Live Cricket Scores & Ball-by-Ball Commentary | CricketHub',
+    description: featuredLiveMatch
+      ? `Live Cricket Score: ${featuredLiveMatch.team1} vs ${featuredLiveMatch.team2}. Current status: ${featuredLiveMatch.status || 'Live'}. Ball-by-ball updates, commentary and stats.`
+      : 'Real-time live cricket scores, ball-by-ball commentary, match fixtures, and scorecard analytics for international & IPL matches.',
+    keywords: 'live cricket score, today match live, ball by ball commentary, ipl live score, international cricket score',
+    structuredData: featuredLiveMatch ? generateMatchSchema(featuredLiveMatch) : null,
+  });
+  const [showTrending, setShowTrending] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cricket_show_trending_sidebar');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleTrending = () => {
+    setShowTrending((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('cricket_show_trending_sidebar', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Only display Spotlight Hero when a match is explicitly pinned by user
   const featuredMatch = useMemo(() => {
@@ -71,12 +110,15 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(m => 
-        m.team1?.toLowerCase().includes(q) ||
-        m.team2?.toLowerCase().includes(q) ||
-        m.series?.toLowerCase().includes(q) ||
-        m.matchDescription?.toLowerCase().includes(q)
-      );
+      // Fuzzy-style search: check multiple fields with includes for speed
+      list = list.filter(m => {
+        const fields = [
+          m.team1, m.team2, m.series, m.matchDescription,
+          m.matchType, m.matchFormat, m.team1ShortName, m.team2ShortName,
+          m.status
+        ];
+        return fields.some(f => f && f.toLowerCase().includes(q));
+      });
     }
 
     return list;
@@ -176,7 +218,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
           </button>
         </div>
 
-        {/* Right Controls: Sort Dropdown, Search Input, Refresh */}
+        {/* Right Controls: Sort Dropdown, Search Input, Refresh & Toggle Trending */}
         <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
           {/* Sort Dropdown */}
           <div className="relative">
@@ -194,8 +236,17 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
               placeholder="Search team, league..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900/90 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
+              className={`w-full bg-slate-900/90 border border-white/10 rounded-xl pl-8 ${searchQuery ? 'pr-8' : 'pr-3'} py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 transition-colors`}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-md hover:bg-slate-700/60 text-slate-400 hover:text-white transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
 
           {/* Refresh Button */}
@@ -209,14 +260,38 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
           >
             <span className="hidden sm:inline">Refresh</span>
           </Button>
+
+          {/* Toggle Trending Sidebar Button */}
+          <button
+            type="button"
+            onClick={toggleTrending}
+            title={showTrending ? "Hide Trending section" : "Show Trending section"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex-shrink-0 ${
+              showTrending
+                ? 'bg-slate-900/80 border-white/10 text-slate-300 hover:text-white hover:bg-slate-800/80 hover:border-white/20'
+                : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 shadow-sm shadow-emerald-500/10'
+            }`}
+          >
+            {showTrending ? (
+              <>
+                <PanelRightClose className="w-3.5 h-3.5 text-slate-400" />
+                <span className="hidden sm:inline">Hide Trending</span>
+              </>
+            ) : (
+              <>
+                <PanelRightOpen className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span>Show Trending</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* ── Main 2-Column Sports Dashboard Layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* ── Main Dashboard Layout (Full width or 2-column) ── */}
+      <div className={`grid grid-cols-1 ${showTrending ? 'lg:grid-cols-12' : 'lg:grid-cols-1'} gap-6 items-start`}>
         
-        {/* ── Left Column: Match Grid (approx 72% on lg) ── */}
-        <div className="lg:col-span-8 space-y-4">
+        {/* ── Left Column: Match Grid ── */}
+        <div className={`${showTrending ? 'lg:col-span-8' : 'w-full'} space-y-4`}>
           
           {/* Section Header: Title & Date Stepper */}
           <div className="flex items-center justify-between pb-1">
@@ -275,14 +350,14 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
 
           {/* Loading Skeletons */}
           {loading && matches.length === 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${showTrending ? 'xl:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-4'} gap-4`}>
               <Skeleton count={6} className="h-44 rounded-2xl" />
             </div>
           )}
 
           {/* Match Cards Grid */}
           {filteredMatches.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${showTrending ? 'xl:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-4'} gap-4`}>
               {filteredMatches.map((match) => (
                 <MatchCard 
                   key={match.id || match.rawText} 
@@ -304,18 +379,21 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer }) => {
         </div>
 
         {/* ── Right Column: Sidebar (Trending & Popular Teams) ── */}
-        <div className="lg:col-span-4 space-y-4">
-          <TrendingWidget 
-            matches={matches} 
-            onSelectMatch={(m) => setSelectedMatch(m)} 
-          />
+        {showTrending && (
+          <div className="lg:col-span-4 space-y-4">
+            <TrendingWidget 
+              matches={matches} 
+              onSelectMatch={(m) => setSelectedMatch(m)} 
+              onClose={toggleTrending}
+            />
 
-          <PopularTeamsWidget 
-            onSelectTeam={(teamName) => {
-              if (onSearchPlayer) onSearchPlayer(teamName);
-            }} 
-          />
-        </div>
+            <PopularTeamsWidget 
+              onSelectTeam={(teamName) => {
+                if (onSearchPlayer) onSearchPlayer(teamName);
+              }} 
+            />
+          </div>
+        )}
 
       </div>
 

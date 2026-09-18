@@ -242,3 +242,98 @@ export function isMatchLive(m) {
     Boolean(m.team1Score && m.team1Score !== '–' && !isMatchUpcoming(m) && !isMatchComplete(m))
   );
 }
+
+/**
+ * Intelligent Venue & Stadium Resolver for Cricket Fixtures
+ */
+const SERIES_VENUE_MAP = [
+  { match: /asian games/i, venue: 'Korogi Sports Park, Nisshin' },
+  { match: /tour of zimbabwe|zimbabwe tour/i, venue: 'Harare Sports Club, Harare' },
+  { match: /in india|india in india|tour of india|india tour/i, venue: 'Arun Jaitley Stadium, Delhi' },
+  { match: /caribbean premier league|cpl/i, venue: 'Kensington Oval, Barbados' },
+  { match: /tour of england|england tour/i, venue: 'Sophia Gardens, Cardiff' },
+  { match: /africa continental cup/i, venue: 'Gahanga Stadium, Kigali' },
+  { match: /ipl|indian premier league/i, venue: 'Wankhede Stadium, Mumbai' },
+  { match: /bbl|big bash/i, venue: 'Melbourne Cricket Ground, Melbourne' },
+  { match: /psl|pakistan super league|tour of pakistan/i, venue: 'Gaddafi Stadium, Lahore' },
+  { match: /sa20|csa|tour of south africa/i, venue: 'Wanderers Stadium, Johannesburg' },
+  { match: /bpl|bangladesh premier league|tour of bangladesh/i, venue: 'Sher-e-Bangla Stadium, Dhaka' },
+  { match: /tour of new zealand/i, venue: 'Eden Park, Auckland' },
+  { match: /tour of sri lanka|lanka premier league/i, venue: 'R. Premadasa Stadium, Colombo' },
+  { match: /tour of west indies/i, venue: 'Kensington Oval, Barbados' },
+  { match: /ilt20|uae|dubai/i, venue: 'Dubai International Cricket Stadium' },
+  { match: /major league|usa/i, venue: 'Grand Prairie Stadium, Dallas' },
+];
+
+const TEAM_HOME_VENUE_MAP = {
+  'india': 'Wankhede Stadium, Mumbai',
+  'australia': 'Melbourne Cricket Ground',
+  'england': 'Lord\'s, London',
+  'pakistan': 'Gaddafi Stadium, Lahore',
+  'south africa': 'Wanderers, Johannesburg',
+  'new zealand': 'Eden Park, Auckland',
+  'sri lanka': 'R. Premadasa, Colombo',
+  'bangladesh': 'Sher-e-Bangla, Dhaka',
+  'afghanistan': 'Sharjah Cricket Stadium',
+  'zimbabwe': 'Harare Sports Club',
+  'ireland': 'Malahide Cricket Club, Dublin',
+  'scotland': 'The Grange Club, Edinburgh',
+  'netherlands': 'VRA Cricket Ground, Amstelveen',
+  'rwanda': 'Gahanga Stadium, Kigali',
+  'uganda': 'Lugogo Oval, Kampala',
+  'kenya': 'Gymkhana Ground, Nairobi',
+  'botswana': 'BCA Cricket Oval, Gaborone',
+  'japan': 'Korogi Sports Park, Nisshin',
+  'guyana': 'Providence Stadium, Guyana',
+  'antigua': 'Sir Vivian Richards Stadium',
+  'barbados': 'Kensington Oval, Bridgetown',
+  'trinidad': 'Brian Lara Stadium, Tarouba',
+  'st lucia': 'Daren Sammy Cricket Ground',
+  'jamaica': 'Sabina Park, Kingston',
+};
+
+export function getMatchVenue(m) {
+  if (!m) return 'International Stadium';
+
+  // 1. Direct string venue
+  if (typeof m.venue === 'string' && m.venue.trim().length > 0 && !m.venue.includes('International Stadium')) {
+    return m.venue.trim();
+  }
+
+  // 2. Object venue from scraped JSON-LD { name, city, country }
+  if (m.venue && typeof m.venue === 'object') {
+    const parts = [m.venue.name, m.venue.city || m.venue.country].filter(Boolean);
+    if (parts.length > 0) return parts.join(', ');
+  }
+
+  // 3. Match from series context
+  const seriesStr = `${m.series || ''} ${m.matchDescription || ''} ${m.rawText || ''}`;
+  for (const item of SERIES_VENUE_MAP) {
+    if (item.match.test(seriesStr)) {
+      return item.venue;
+    }
+  }
+
+  // 4. Match from home team (team1 or team2)
+  const t1Clean = (m.team1 || '').toLowerCase().replace(/ women| women's| w\b| u19| men\b/g, '').trim();
+  const t2Clean = (m.team2 || '').toLowerCase().replace(/ women| women's| w\b| u19| men\b/g, '').trim();
+
+  for (const [team, venue] of Object.entries(TEAM_HOME_VENUE_MAP)) {
+    if (t1Clean.includes(team) || team.includes(t1Clean)) {
+      return venue;
+    }
+  }
+  for (const [team, venue] of Object.entries(TEAM_HOME_VENUE_MAP)) {
+    if (t2Clean.includes(team) || team.includes(t2Clean)) {
+      return venue;
+    }
+  }
+
+  // 5. Fallback if series exists
+  if (m.series) {
+    return m.series.split(' 202')[0];
+  }
+
+  return 'International Cricket Stadium';
+}
+

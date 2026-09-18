@@ -106,10 +106,21 @@ class CacheService {
   /**
    * Helper to check if cached player profile data is valid and not corrupted
    */
-  isValidPlayerRecord(data) {
+  isValidPlayerRecord(data, searchKey = '') {
     if (!data || !data.name) return false;
     if (data.country === 'November' || data.country === 'Videos') return false;
     if (data.batting_stats?.test?.matches === 'Matches') return false;
+
+    // Reject mismatched player data (e.g. searching 'jason behrandoff' returning 'Virat Kohli')
+    if (searchKey && data.name) {
+      const cleanName = data.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanSearch = searchKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const nameParts = data.name.toLowerCase().split(/\s+/);
+      const isMatch = cleanName.includes(cleanSearch) ||
+                      cleanSearch.includes(cleanName) ||
+                      nameParts.some(part => part.length >= 3 && cleanSearch.includes(part));
+      if (!isMatch) return false;
+    }
     return true;
   }
 
@@ -122,7 +133,7 @@ class CacheService {
 
     // 1. In-memory check
     const memData = memCache.get(memKey);
-    if (memData && this.isValidPlayerRecord(memData)) {
+    if (memData && this.isValidPlayerRecord(memData, searchKey)) {
       return { data: memData, source: 'memory-cache' };
     }
 
@@ -130,7 +141,7 @@ class CacheService {
     if (isDbConnected()) {
       try {
         const dbPlayer = await Player.findOne({ searchKey });
-        if (dbPlayer && this.isValidPlayerRecord(dbPlayer)) {
+        if (dbPlayer && this.isValidPlayerRecord(dbPlayer, searchKey)) {
           // If less than 24 hours old, return cached
           const isStale = (Date.now() - new Date(dbPlayer.lastScraped).getTime()) > config.cacheTTL.playerStats * 1000;
           if (!isStale) {

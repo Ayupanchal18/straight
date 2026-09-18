@@ -139,6 +139,14 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
     year: 'numeric'
   });
 
+  // Keep active match state synchronized with live polled score updates
+  const currentActiveMatch = useMemo(() => {
+    if (!selectedMatch) return null;
+    const sId = selectedMatch.id || selectedMatch.rawText || selectedMatch.matchId;
+    const found = matches.find(m => (m.id || m.rawText || m.matchId) === sId);
+    return found ? { ...selectedMatch, ...found } : selectedMatch;
+  }, [matches, selectedMatch]);
+
   return (
     <div className="space-y-6">
       
@@ -432,10 +440,11 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, sharedLiveScores }
       )}
 
       {/* Interactive Match Details Modal */}
-      {selectedMatch && (
+      {currentActiveMatch && (
         <MatchDetailModal
-          match={selectedMatch}
+          match={currentActiveMatch}
           onClose={() => setSelectedMatch(null)}
+          onRefreshScores={refresh}
         />
       )}
     </div>

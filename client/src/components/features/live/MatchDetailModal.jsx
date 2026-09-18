@@ -12,7 +12,7 @@ import cricketApi from '../../../services/api';
 import { useFavorites } from '../../../context/FavoritesContext';
 import { TeamBadge, getTeamTheme, isMatchLive, isMatchComplete, isMatchUpcoming, getMatchVenue } from '../../../utils/teamUtils.jsx';
 
-export const MatchDetailModal = ({ match, onClose }) => {
+export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -23,9 +23,12 @@ export const MatchDetailModal = ({ match, onClose }) => {
   const matchId = match.id || match.rawText;
   const isPinned = pinnedMatchId === matchId || isFavorite('match', matchId);
 
-  const fetchDetails = async () => {
-    if (!match.cricbuzzLink) { setLoading(false); return; }
-    setLoading(true);
+  const fetchDetails = async (isSilent = false) => {
+    if (!match.cricbuzzLink) {
+      if (!isSilent) setLoading(false);
+      return;
+    }
+    if (!isSilent && !details) setLoading(true);
     setError(null);
     try {
       const res = await cricketApi.getMatchDetails(match.cricbuzzLink);
@@ -34,15 +37,35 @@ export const MatchDetailModal = ({ match, onClose }) => {
       }
     } catch (err) {
       console.warn('Live match details fallback:', err.message);
-      setError(err.message || 'Details currently loading...');
+      if (!details) {
+        setError(err.message || 'Details currently loading...');
+      }
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDetails();
-  }, [match.cricbuzzLink]);
+    fetchDetails(false);
+
+    // Auto-refresh match details and parent live scores every 15s if the match is live
+    const isLive = isMatchLive(match) || match.isLive;
+    if (!isLive) return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchDetails(true);
+        if (onRefreshScores) onRefreshScores();
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [match.cricbuzzLink, isMatchLive(match)]);
+
+  const handleManualRefresh = async () => {
+    if (onRefreshScores) onRefreshScores();
+    await fetchDetails(false);
+  };
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -104,22 +127,54 @@ export const MatchDetailModal = ({ match, onClose }) => {
   const t1LatestInnings = t1InningsList.length > 0 ? t1InningsList[t1InningsList.length - 1] : null;
   const t2LatestInnings = t2InningsList.length > 0 ? t2InningsList[t2InningsList.length - 1] : null;
 
-  // Primary scores accurately matched to each team
-  const t1Score = t1LatestInnings?.score !== undefined 
-    ? `${t1LatestInnings.score}/${t1LatestInnings.wickets ?? 0}` 
-    : (match.team1Score || (innScores.length === 1 && !t2LatestInnings ? `${innScores[0].score}/${innScores[0].wickets}` : '–'));
+  // Helper to parse cricket overs to ball count for accurate comparison
+  const parseOversToBalls = (ov) => {
+    if (!ov) return 0;
+    const str = String(ov).replace(/[^\d.]/g, '');
+    const val = parseFloat(str) || 0;
+    const whole = Math.floor(val);
+    return whole * 6 + Math.round((val - whole) * 10);
+  };
 
-  const t1Overs = t1LatestInnings?.overs 
-    ? `(${t1LatestInnings.overs} ov)` 
-    : (match.team1Overs ? `(${match.team1Overs} ov)` : '');
+  const t1MatchOversBalls = parseOversToBalls(match.team1Overs);
+  const t1DetailsOversBalls = parseOversToBalls(t1LatestInnings?.overs);
 
-  const t2Score = t2LatestInnings?.score !== undefined 
-    ? `${t2LatestInnings.score}/${t2LatestInnings.wickets ?? 0}` 
-    : (match.team2Score || (innScores.length === 2 && !t1LatestInnings ? `${innScores[1].score}/${innScores[1].wickets}` : (innScores.length > 0 ? '' : '–')));
+  let t1Score = '–';
+  let t1Overs = '';
 
-  const t2Overs = t2LatestInnings?.overs 
-    ? `(${t2LatestInnings.overs} ov)` 
-    : (match.team2Overs ? `(${match.team2Overs} ov)` : '');
+  if (t1MatchOversBalls >= t1DetailsOversBalls && match.team1Score) {
+    t1Score = match.team1Score;
+    t1Overs = match.team1Overs ? `(${match.team1Overs} ov)` : '';
+  } else if (t1LatestInnings?.score !== undefined) {
+    t1Score = `${t1LatestInnings.score}/${t1LatestInnings.wickets ?? 0}`;
+    t1Overs = t1LatestInnings?.overs ? `(${t1LatestInnings.overs} ov)` : '';
+  } else if (match.team1Score) {
+    t1Score = match.team1Score;
+    t1Overs = match.team1Overs ? `(${match.team1Overs} ov)` : '';
+  } else if (innScores.length === 1 && !t2LatestInnings) {
+    t1Score = `${innScores[0].score}/${innScores[0].wickets}`;
+  }
+
+  const t2MatchOversBalls = parseOversToBalls(match.team2Overs);
+  const t2DetailsOversBalls = parseOversToBalls(t2LatestInnings?.overs);
+
+  let t2Score = '–';
+  let t2Overs = '';
+
+  if (t2MatchOversBalls >= t2DetailsOversBalls && match.team2Score) {
+    t2Score = match.team2Score;
+    t2Overs = match.team2Overs ? `(${match.team2Overs} ov)` : '';
+  } else if (t2LatestInnings?.score !== undefined) {
+    t2Score = `${t2LatestInnings.score}/${t2LatestInnings.wickets ?? 0}`;
+    t2Overs = t2LatestInnings?.overs ? `(${t2LatestInnings.overs} ov)` : '';
+  } else if (match.team2Score) {
+    t2Score = match.team2Score;
+    t2Overs = match.team2Overs ? `(${match.team2Overs} ov)` : '';
+  } else if (innScores.length === 2 && !t1LatestInnings) {
+    t2Score = `${innScores[1].score}/${innScores[1].wickets}`;
+  } else if (innScores.length > 0) {
+    t2Score = '';
+  }
 
   // Determine which team is actively batting
   const currentBattingTeamId = details?.currentInnings?.battingTeamId || match.currentBattingTeamId;
@@ -135,8 +190,6 @@ export const MatchDetailModal = ({ match, onClose }) => {
   const maxBalls = maxOvers ? maxOvers * 6 : null;
 
   // Innings identification & Chase evaluation
-  // Innings 1: Only 1 team has batted / is batting and no target is set
-  // Innings 2 (Chase): 2nd innings in limited overs match or explicit target exists
   const currentInningsId = details?.currentInnings?.inningsId || (innScores.length > 0 ? innScores.length : 1);
   const isSecondInnings = (innScores.length >= 2) || (currentInningsId === 2) || Boolean(details?.target || match.target);
   const isChase = !isTestMatch && isSecondInnings && Boolean(details?.target || match.target || (innScores.length >= 2 && innScores[0]?.score));
@@ -148,7 +201,7 @@ export const MatchDetailModal = ({ match, onClose }) => {
     : ((isTeam1Batting ? t1LatestInnings?.score : t2LatestInnings?.score) ?? innScores[0]?.score ?? 0);
   const requiredRuns = isChase && target !== null ? (details?.requiredRuns ?? Math.max(0, target - currentBattingScore)) : null;
 
-  const currentOversNum = parseFloat(details?.currentInnings?.overs || (isTeam1Batting ? t1LatestInnings?.overs : t2LatestInnings?.overs) || 0) || 0;
+  const currentOversNum = parseFloat(details?.currentInnings?.overs || (isTeam1Batting ? (t1MatchOversBalls > t1DetailsOversBalls ? match.team1Overs : t1LatestInnings?.overs) : (t2MatchOversBalls > t2DetailsOversBalls ? match.team2Overs : t2LatestInnings?.overs)) || 0) || 0;
   const currentOversFloor = Math.floor(currentOversNum);
   const currentBalls = currentOversFloor * 6 + Math.round((currentOversNum - currentOversFloor) * 10);
   const ballsRemaining = maxBalls ? Math.max(0, maxBalls - currentBalls) : null;
@@ -194,13 +247,17 @@ export const MatchDetailModal = ({ match, onClose }) => {
     return '–';
   }, [details?.lastWicket, match.lastWicket]);
 
-  // Batsmen at the crease
-  const batsmenAtCrease = details?.currentBatsmen?.length > 0
-    ? details.currentBatsmen
-    : (match.currentBatsmen?.length > 0 ? match.currentBatsmen : [
-        { name: 'Hasini Perera', runs: 1, balls: 4, fours: 0, sixes: 0, strikeRate: '25.00', isStriker: true },
-        { name: 'Imesha Dulani', runs: 22, balls: 19, fours: 4, sixes: 0, strikeRate: '115.79', isStriker: false }
-      ]);
+  // Batsmen at the crease — prioritized by freshness between match polling & details
+  const isMatchBatsmenNewer = (match.currentBatsmen?.length > 0) && (
+    !details?.currentBatsmen?.length ||
+    (t2MatchOversBalls > t2DetailsOversBalls || t1MatchOversBalls > t1DetailsOversBalls)
+  );
+
+  const batsmenAtCrease = isMatchBatsmenNewer
+    ? match.currentBatsmen
+    : (details?.currentBatsmen?.length > 0
+        ? details.currentBatsmen
+        : (match.currentBatsmen?.length > 0 ? match.currentBatsmen : []));
 
   // Scorecards & Fall of Wickets
   const scorecards = details?.scorecards || [];
@@ -810,7 +867,7 @@ export const MatchDetailModal = ({ match, onClose }) => {
             <Button
               variant="secondary"
               size="sm"
-              onClick={fetchDetails}
+              onClick={handleManualRefresh}
               loading={loading}
               icon={RefreshCw}
               className="cursor-pointer flex-1 sm:flex-initial justify-center text-xs"

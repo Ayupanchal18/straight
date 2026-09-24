@@ -32,6 +32,9 @@ try {
   console.warn('[ScraperService] Could not load playerRegistry.json:', e.message);
 }
 
+// Global runtime cache for verified match stadium venues (synced between live scores & match details)
+const VENUE_CACHE = new Map();
+
 /**
  * Dynamically register a player profile in the runtime registry
  */
@@ -160,7 +163,27 @@ async function scrapeLiveMatches() {
     const { data: html } = await client.get(url);
     const $ = cheerio.load(html);
 
-    // Step 1: Extract all match links and deduplicate by matchId
+    // Step 1: Extract authentic match venues from structured JSON-LD ItemList
+    const structuredVenues = new Map();
+    $('script[type="application/ld+json"]').each(function () {
+      try {
+        const json = JSON.parse($(this).html());
+        const items = json.mainEntity?.itemListElement;
+        if (Array.isArray(items)) {
+          items.forEach(it => {
+            const t1 = (it.competitor?.[0]?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const t2 = (it.competitor?.[1]?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const loc = (it.location || '').replace(/,\s*$/, '').trim();
+            if (t1 && t2 && loc) {
+              structuredVenues.set(`${t1}_vs_${t2}`, loc);
+              structuredVenues.set(`${t2}_vs_${t1}`, loc);
+            }
+          });
+        }
+      } catch (e) {}
+    });
+
+    // Step 2: Extract all match links and deduplicate by matchId
     const matchMap = new Map();
 
     $('a[href*="/live-cricket-scores/"]').each(function () {
@@ -204,6 +227,15 @@ async function scrapeLiveMatches() {
 
       const cleanLink = href.startsWith('http') ? href : `https://www.cricbuzz.com${href}`;
 
+      // Resolve venue accurately from structured JSON-LD or runtime cache
+      const t1Clean = team1.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const t2Clean = team2.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const venueKey = `${t1Clean}_vs_${t2Clean}`;
+      const matchedVenue = structuredVenues.get(venueKey) || VENUE_CACHE.get(String(matchId)) || null;
+      if (matchedVenue) {
+        VENUE_CACHE.set(String(matchId), matchedVenue);
+      }
+
       const rawMatchObj = {
         id: `match-${matchId}`,
         matchId,
@@ -213,6 +245,7 @@ async function scrapeLiveMatches() {
         matchType,
         rawText: title,
         status: status || 'Scheduled',
+        venue: matchedVenue,
         cricbuzzLink: cleanLink,
         team1Score: null,
         team2Score: null,
@@ -267,6 +300,9 @@ async function scrapeLiveMatches() {
                 minute: '2-digit',
                 hour12: true,
               }) + ' IST';
+        }
+        if (!m.venue && VENUE_CACHE.has(String(m.matchId))) {
+          m.venue = VENUE_CACHE.get(String(m.matchId));
         }
         m.matchFormat = header.matchFormat || m.matchType;
         m.matchDescription = header.matchDescription || m.matchType;
@@ -818,6 +854,15 @@ async function scrapeMatchDetails(matchUrl) {
         }
       } catch (e) {}
     });
+
+    if (results.venue) {
+      const vParts = [results.venue.name, results.venue.city || results.venue.country].filter(Boolean);
+      if (vParts.length > 0) {
+        const vStr = vParts.join(', ');
+        results.venueString = vStr;
+        VENUE_CACHE.set(String(matchId), vStr);
+      }
+    }
   } catch (e) {
     // venue remains null — non-critical
   }

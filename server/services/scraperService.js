@@ -99,6 +99,59 @@ function evaluateMatchState(m, header = {}, mini = {}) {
 }
 
 /**
+ * Standardize any match status string or scheduled time strictly to IST (Asia/Kolkata)
+ */
+function convertStatusToIST(rawStatus, timestamp) {
+  if (!rawStatus) return rawStatus;
+
+  // 1. If timestamp exists and status is a scheduled "starts at" message
+  if (timestamp && /starts at/i.test(rawStatus)) {
+    try {
+      const d = new Date(timestamp);
+      const dateStr = d.toLocaleDateString('en-US', {
+        timeZone: 'Asia/Kolkata',
+        month: 'short',
+        day: 'numeric',
+      });
+      const timeStr = d.toLocaleTimeString('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      return `Match starts at ${dateStr}, ${timeStr} IST`;
+    } catch (e) {}
+  }
+
+  // 2. Regex fallback for GMT strings like "Match starts at Sep 25, 00:00 GMT" or "... at 14:30 GMT"
+  const gmtMatch = rawStatus.match(/(starts at\s+)?([A-Za-z]+ \d+),?\s+(\d{1,2}:\d{2})\s*GMT/i);
+  if (gmtMatch) {
+    try {
+      const datePart = gmtMatch[2];
+      const timePart = gmtMatch[3];
+      const currentYear = new Date().getFullYear();
+      const parsedUtc = new Date(`${datePart} ${currentYear} ${timePart} UTC`);
+      if (!isNaN(parsedUtc.getTime())) {
+        const dateStr = parsedUtc.toLocaleDateString('en-US', {
+          timeZone: 'Asia/Kolkata',
+          month: 'short',
+          day: 'numeric',
+        });
+        const timeStr = parsedUtc.toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Kolkata',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
+        return rawStatus.replace(gmtMatch[0], `${gmtMatch[1] || ''}${dateStr}, ${timeStr} IST`);
+      }
+    } catch (e) {}
+  }
+
+  return rawStatus;
+}
+
+/**
  * Scrape Live Scores from Cricbuzz — enriched with JSON API for actual scores
  */
 async function scrapeLiveMatches() {
@@ -199,9 +252,22 @@ async function scrapeLiveMatches() {
         const mini = data.miniscore || {};
         const scoreDetails = mini.matchScoreDetails || {};
 
-        // Update status from real-time API
-        m.status = header.status || mini.status || m.status;
+        // Update status and timings from real-time API (strictly in IST)
+        const rawLiveStatus = header.status || mini.status || m.status;
+        m.status = convertStatusToIST(rawLiveStatus, header.matchStartTimestamp);
         m.state = header.state || '';
+        m.matchStartTimestamp = header.matchStartTimestamp || null;
+        if (header.matchStartTimestamp) {
+          m.startTime = new Date(header.matchStartTimestamp).toISOString();
+          m.startTimeIST = header.matchStartTimeIST 
+            ? (header.matchStartTimeIST.includes('IST') ? header.matchStartTimeIST : `${header.matchStartTimeIST} IST`)
+            : new Date(header.matchStartTimestamp).toLocaleTimeString('en-US', {
+                timeZone: 'Asia/Kolkata',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+              }) + ' IST';
+        }
         m.matchFormat = header.matchFormat || m.matchType;
         m.matchDescription = header.matchDescription || m.matchType;
         m.series = header.seriesName || header.seriesDesc || '';
@@ -359,7 +425,7 @@ async function scrapeMatchDetails(matchUrl) {
     results.matchFormat = header.matchFormat || '';
     results.matchType = header.matchType || '';
     results.state = header.state || '';
-    results.status = header.status || mini.status || '';
+    results.status = convertStatusToIST(header.status || mini.status || '', header.matchStartTimestamp);
     results.isComplete = !!header.complete;
 
     // Series
@@ -383,12 +449,27 @@ async function scrapeMatchDetails(matchUrl) {
       decision: header.tossResults.decision || '',
     } : null;
 
-    // Timing
+    // Timing (Strictly IST)
+    results.matchStartTimestamp = header.matchStartTimestamp || null;
     results.startTime = header.matchStartTimestamp
       ? new Date(header.matchStartTimestamp).toISOString()
       : null;
     results.startTimeLocal = header.matchStartTimeLocal || '';
-    results.startTimeIST = header.matchStartTimeIST || '';
+    results.startTimeIST = header.matchStartTimeIST
+      ? (header.matchStartTimeIST.includes('IST') ? header.matchStartTimeIST : `${header.matchStartTimeIST} IST`)
+      : (header.matchStartTimestamp ? new Date(header.matchStartTimestamp).toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Kolkata',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        }) + ' IST' : '');
+    results.startDateIST = header.matchStartTimestamp
+      ? new Date(header.matchStartTimestamp).toLocaleDateString('en-US', {
+          timeZone: 'Asia/Kolkata',
+          month: 'short',
+          day: 'numeric',
+        })
+      : '';
     results.dayNight = !!header.dayNight;
 
     // Venue (from SportsEvent structured data as backup later)
@@ -597,17 +678,23 @@ async function scrapeMatchDetails(matchUrl) {
 
       if (scData.scoreCard && Array.isArray(scData.scoreCard)) {
         results.scorecards = scData.scoreCard.map(sc => {
-          const batsmen = sc.batTeamDetails?.batsmenData 
-            ? Object.values(sc.batTeamDetails.batsmenData).map(b => ({
-                name: b.batName || b.name,
-                runs: b.runs,
-                balls: b.balls,
-                fours: b.fours,
-                sixes: b.sixes,
-                strikeRate: b.strikeRate,
-                outDesc: b.outDesc || 'not out',
-              }))
-            : [];
+          const rawBatsmenData = sc.batTeamDetails?.batsmenData || {};
+          const batsmenMap = {};
+          Object.values(rawBatsmenData).forEach(b => {
+            if (b.batId) batsmenMap[String(b.batId)] = b;
+            if (b.batName) batsmenMap[b.batName.toLowerCase()] = b;
+            if (b.name) batsmenMap[b.name.toLowerCase()] = b;
+          });
+
+          const batsmen = Object.values(rawBatsmenData).map(b => ({
+            name: b.batName || b.name,
+            runs: b.runs,
+            balls: b.balls,
+            fours: b.fours,
+            sixes: b.sixes,
+            strikeRate: b.strikeRate,
+            outDesc: b.outDesc || 'not out',
+          }));
 
           const bowlers = sc.bowlTeamDetails?.bowlersData
             ? Object.values(sc.bowlTeamDetails.bowlersData).map(b => ({
@@ -621,26 +708,59 @@ async function scrapeMatchDetails(matchUrl) {
             : [];
 
           const fallOfWickets = sc.wicketsData
-            ? Object.values(sc.wicketsData).map(w => ({
-                name: w.batName || w.name,
-                score: w.wktRuns !== undefined ? `${w.wktRuns}/${w.wktNum || w.wktNbr}` : w.score,
-                overs: w.wktOver || w.overs,
-                runs: w.wktRuns || w.runs,
-                wktNum: w.wktNum || w.wktNbr,
-              }))
+            ? Object.values(sc.wicketsData).map(w => {
+                const bInfo = batsmenMap[String(w.batId)] || batsmenMap[(w.batName || '').toLowerCase()] || {};
+                const teamRuns = w.wktRuns !== undefined ? w.wktRuns : w.runs;
+                const batterRuns = bInfo.runs !== undefined ? bInfo.runs : null;
+                const batterBalls = bInfo.balls !== undefined ? bInfo.balls : null;
+
+                return {
+                  name: w.batName || w.name,
+                  score: w.wktRuns !== undefined ? `${w.wktRuns}/${w.wktNum || w.wktNbr}` : w.score,
+                  overs: w.wktOver || w.overs,
+                  runs: batterRuns !== null ? batterRuns : teamRuns,
+                  balls: batterBalls,
+                  batterRuns,
+                  batterBalls,
+                  teamRuns,
+                  wktNum: w.wktNum || w.wktNbr,
+                };
+              })
             : [];
 
           return {
             inningsId: sc.inningsId,
+            batTeamId: sc.batTeamDetails?.batTeamId,
             batTeamName: sc.batTeamDetails?.batTeamName || sc.batTeamDetails?.batTeamShortName || '',
-            score: sc.scoreDetails?.runs || sc.scoreDetails?.score,
-            wickets: sc.scoreDetails?.wickets,
-            overs: sc.scoreDetails?.overs,
+            batTeamShortName: sc.batTeamDetails?.batTeamShortName || '',
+            score: sc.scoreDetails?.runs ?? sc.scoreDetails?.score ?? 0,
+            wickets: sc.scoreDetails?.wickets ?? 0,
+            overs: sc.scoreDetails?.overs ?? 0,
             batsmen,
             bowlers,
             fallOfWickets,
           };
         });
+
+        // Ensure any live innings in inningsScores not yet in scorecards is included
+        if (Array.isArray(results.inningsScores)) {
+          results.inningsScores.forEach(inn => {
+            if (!results.scorecards.some(sc => sc.inningsId === inn.inningsId)) {
+              results.scorecards.push({
+                inningsId: inn.inningsId,
+                batTeamId: inn.battingTeamId,
+                batTeamName: inn.batTeamName || (inn.battingTeamId === results.team1?.id ? results.team1.name : results.team2?.name) || '',
+                batTeamShortName: (inn.battingTeamId === results.team1?.id ? results.team1.shortName : results.team2?.shortName) || '',
+                score: inn.score ?? 0,
+                wickets: inn.wickets ?? 0,
+                overs: inn.overs ?? 0,
+                batsmen: results.currentInnings?.inningsId === inn.inningsId ? (results.currentBatsmen || []) : [],
+                bowlers: results.currentInnings?.inningsId === inn.inningsId ? (results.currentBowlers || []) : [],
+                fallOfWickets: [],
+              });
+            }
+          });
+        }
       }
     } catch (scErr) {
       // Non-fatal if scorecard API fails

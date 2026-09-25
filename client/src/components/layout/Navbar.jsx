@@ -1,161 +1,206 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Radio, 
-  Calendar, 
-  User, 
-  Scale, 
-  Bookmark, 
-  Flame,
+import {
+  Radio,
+  Calendar,
+  User,
+  Scale,
+  Bookmark,
   Search,
-  Moon,
-  Newspaper,
   BarChart2,
-  Trophy,
-  Command
+  ChevronDown,
+  Menu,
+  X,
 } from 'lucide-react';
 import { useFavorites } from '../../context/FavoritesContext';
 
 export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
   const { favorites } = useFavorites();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Primary nav items matching design image nav order
   const navItems = [
-    { id: 'live', label: 'Live Scores', icon: Radio, isLive: true },
-    { id: 'schedule', label: 'Fixtures', icon: Calendar },
-    { id: 'results', label: 'Results', icon: BarChart2 },
-    { id: 'players', label: 'Player Stats', icon: User },
-    { id: 'compare', label: 'H2H Compare', icon: Scale },
-    { id: 'favorites', label: 'Watchlist', icon: Bookmark, count: favorites.length },
+    { id: 'live', label: 'Live', icon: Radio, isLive: true },
+    { id: 'schedule', label: 'Series', icon: Calendar },
+    { id: 'players', label: 'Players', icon: User },
+    { id: 'compare', label: 'Stats', icon: BarChart2 },
+    { id: 'compare', label: 'Compare', icon: Scale },
+    { id: 'favorites', label: 'More', icon: Bookmark, count: favorites.length },
+  ];
+
+  // Deduplicated nav (merge 'Stats' and 'Compare' into the same tab)
+  const navLinks = [
+    { id: 'live',     label: 'Live',    isLive: true },
+    { id: 'schedule', label: 'Series'  },
+    { id: 'players',  label: 'Players' },
+    { id: 'players',  label: 'Stats'   },
+    { id: 'compare',  label: 'Compare' },
+    { id: 'favorites',label: 'More ▾', count: favorites.length },
   ];
 
   return (
     <>
-      {/* ── Top Header Bar (Desktop & Tablet) ── */}
-      <header className="glass-nav sticky top-0 z-40 border-b border-white/[0.06] bg-[#070b14]/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 gap-4">
-            
-            {/* Logo & Brand */}
-            <div 
-              className="flex items-center gap-2.5 cursor-pointer select-none group flex-shrink-0"
+      {/* ═══════════════════════════════════════════════
+          TOP NAVIGATION BAR
+          ═══════════════════════════════════════════════ */}
+      <header className="glass-nav sticky top-0 z-40 border-b border-white/[0.07]">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14 gap-4">
+
+            {/* ── Logo & Brand ── */}
+            <div
+              className="flex items-center gap-2 cursor-pointer select-none flex-shrink-0 group"
               onClick={() => setActiveTab('live')}
             >
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-                <Flame className="w-4 h-4 text-white" />
+              {/* Cricket icon badge */}
+              <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-blue-glow flex-shrink-0 group-hover:scale-105 transition-transform">
+                <span className="text-sm leading-none">🏏</span>
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base sm:text-lg font-black tracking-tight text-white font-display">
-                    CRICKET<span className="text-emerald-400">HUB</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-red-500/15 text-red-400 border border-red-500/30 uppercase tracking-wider">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    Live
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 tracking-wide hidden lg:block">Real-time Scores. Deeper Insights.</p>
-              </div>
+              <span className="text-[15px] font-black tracking-tight text-white">
+                Cricket<span className="text-blue-400">Hub</span>
+              </span>
             </div>
 
-            {/* Desktop Navigation Items */}
-            <nav className="hidden xl:flex items-center gap-1">
-              {navItems.map((item) => {
-                const Icon = item.icon;
+            {/* ── Desktop Navigation Links ── */}
+            <nav className="hidden lg:flex items-center h-full gap-0.5">
+              {navLinks.map((item, idx) => {
                 const isActive = activeTab === item.id;
-
                 return (
                   <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id === 'results' ? 'live' : item.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                    key={`${item.id}-${idx}`}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`nav-link flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] transition-all duration-150 cursor-pointer relative ${
                       isActive
-                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent'
+                        ? 'text-white font-semibold'
+                        : 'text-slate-400 hover:text-slate-200 font-medium'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                    {item.isLive && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                    )}
                     <span>{item.label}</span>
                     {item.count !== undefined && item.count > 0 && (
-                      <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] flex items-center justify-center font-bold">
+                      <span className="ml-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
                         {item.count}
                       </span>
+                    )}
+                    {/* Active underline indicator */}
+                    {isActive && (
+                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-blue-500 rounded-full" />
                     )}
                   </button>
                 );
               })}
             </nav>
 
-            {/* Right Action Tools: Search, Theme, Profile */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {/* Search Trigger (Desktop) — opens Command Palette */}
+            {/* ── Right: Search + User Avatar ── */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+
+              {/* Search bar — desktop (centered like design image) */}
               <button
                 type="button"
                 onClick={onOpenSearch}
-                className="relative hidden sm:flex items-center gap-2 w-48 md:w-60 px-3 py-1.5 bg-slate-900/90 border border-white/10 rounded-xl text-xs text-slate-400 hover:text-slate-300 hover:border-white/20 transition-colors cursor-pointer group"
+                className="hidden sm:flex items-center gap-2 w-52 md:w-64 px-3 py-1.5 bg-navy-800/80 border border-white/[0.1] rounded-lg text-[12px] text-slate-400 hover:text-slate-300 hover:border-white/[0.18] hover:bg-navy-700/80 transition-all cursor-pointer group"
+                title="Search (Ctrl+K)"
               >
-                <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-400 transition-colors" />
-                <span className="flex-1 text-left">Search anything...</span>
-                <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-800/80 border border-white/10 text-[10px] font-bold text-slate-500 font-mono">
-                  Ctrl K
+                <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+                <span className="flex-1 text-left truncate">Search players, teams, series...</span>
+                <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[9px] font-bold text-slate-500 font-mono flex-shrink-0">
+                  ⌘K
                 </kbd>
               </button>
 
-              {/* Search Icon (Mobile) — opens Command Palette */}
+              {/* Search icon — mobile */}
               <button
                 type="button"
                 onClick={onOpenSearch}
-                className="sm:hidden p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
-                title="Search (Ctrl+K)"
+                className="sm:hidden p-1.5 rounded-lg bg-navy-800/80 border border-white/[0.1] text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
+                title="Search"
               >
                 <Search className="w-4 h-4" />
               </button>
 
-              {/* Dark/Light toggle placeholder */}
-              <button 
-                type="button"
-                title="Theme Toggle"
-                className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
-              >
-                <Moon className="w-3.5 h-3.5" />
-              </button>
-
               {/* User Avatar */}
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-slate-800 to-slate-700 border border-white/10 flex items-center justify-center text-xs font-bold text-white shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors">
-                H
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-[11px] font-bold text-white shadow-sm cursor-pointer hover:scale-105 transition-transform select-none flex-shrink-0">
+                C
               </div>
-            </div>
 
+              {/* Mobile menu toggle */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(v => !v)}
+                className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* ── Mobile Dropdown Menu ── */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-white/[0.07] bg-navy-900/98 px-4 py-3 space-y-1 animate-slide-up">
+            {navLinks.map((item, idx) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={`mob-${item.id}-${idx}`}
+                  onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-500/10 border border-blue-500/20 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                  }`}
+                >
+                  {item.isLive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  )}
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
-      {/* ── Mobile Bottom Navigation Bar ── */}
-      <nav className="xl:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#070a12]/95 backdrop-blur-2xl border-t border-white/10 px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-bottom">
-        {navItems.map((item) => {
+      {/* ═══════════════════════════════════════════════
+          MOBILE BOTTOM NAVIGATION BAR
+          ═══════════════════════════════════════════════ */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-navy-950/98 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 flex items-center justify-around safe-area-bottom">
+        {[
+          { id: 'live',     label: 'Live',     icon: Radio,    isLive: true },
+          { id: 'schedule', label: 'Schedule',  icon: Calendar  },
+          { id: 'players',  label: 'Players',   icon: User      },
+          { id: 'compare',  label: 'Compare',   icon: Scale     },
+          { id: 'favorites',label: 'Watchlist', icon: Bookmark, count: favorites.length },
+        ].map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id === 'results' ? 'live' : item.id)}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer relative ${
-                isActive ? 'text-emerald-400' : 'text-slate-400 hover:text-slate-200'
+              onClick={() => setActiveTab(item.id)}
+              className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition-all cursor-pointer relative min-w-[44px] ${
+                isActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
               <div className="relative">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400 scale-110' : 'text-slate-400'} transition-transform`} />
+                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
                 {item.isLive && (
-                  <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                 )}
                 {item.count !== undefined && item.count > 0 && (
-                  <span className="absolute -top-1 -right-2 min-w-[12px] h-[12px] rounded-full bg-emerald-500 text-slate-950 text-[8px] font-black flex items-center justify-center px-0.5">
+                  <span className="absolute -top-1 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-blue-500 text-white text-[8px] font-black flex items-center justify-center px-0.5">
                     {item.count}
                   </span>
                 )}
               </div>
-              <span className={`text-[9px] mt-1 font-bold ${isActive ? 'text-emerald-400' : 'text-slate-400'}`}>
+              <span className={`text-[9px] font-semibold tracking-wide ${isActive ? 'text-blue-400' : 'text-slate-500'}`}>
                 {item.label.split(' ')[0]}
               </span>
+              {/* Active dot */}
+              {isActive && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-blue-400 rounded-full" />
+              )}
             </button>
           );
         })}
@@ -163,4 +208,3 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
     </>
   );
 };
-

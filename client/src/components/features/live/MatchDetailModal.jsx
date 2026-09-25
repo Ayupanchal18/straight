@@ -515,189 +515,253 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
     return rawStatus;
   }, [rawStatus, details?.matchStartTimestamp, match.matchStartTimestamp, details?.startTime, match.startTime]);
 
+  // ── Ball Bead helper (reused in bead strip) ──
+  const BallBeadInner = ({ ball }) => {
+    const b = String(ball ?? '').trim();
+    if (b === '4') return <span className="bead bead-four">{b}</span>;
+    if (b === '6') return <span className="bead bead-six">{b}</span>;
+    if (b === 'W') return <span className="bead bead-wicket">W</span>;
+    if (b === '0' || b === '.' || b === '') return <span className="bead bead-dot">·</span>;
+    if (b === 'WD' || b === 'NB' || b === 'LB')
+      return <span className="bead bead-extras" style={{ fontSize: '8px' }}>{b}</span>;
+    return <span className="bead bead-run">{b}</span>;
+  };
+
   return createPortal(
-    <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-xl animate-fade-in"
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-3 md:p-4 bg-black/80 backdrop-blur-xl animate-fade-in"
       onClick={onClose}
     >
-      <div 
-        className="w-full max-w-4xl h-[94vh] sm:h-auto sm:max-h-[90vh] overflow-hidden rounded-2xl border border-white/10 shadow-2xl p-0 relative flex flex-col bg-[#0a0f1d] my-auto"
-        onClick={(e) => e.stopPropagation()}
+
+
+      <div
+        className="w-full max-w-4xl h-[96vh] sm:h-auto sm:max-h-[92vh] flex flex-col bg-navy-900 border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
       >
-        
-        {/* ── Top Header Bar ── */}
-        <div className="bg-[#070b16]/95 backdrop-blur-xl border-b border-white/10 px-3.5 sm:px-6 py-3 sm:py-4 flex items-start justify-between gap-2 sm:gap-4 flex-shrink-0">
-          <div className="flex-1 min-w-0 pr-1">
-            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-              <span className="text-[11px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider truncate max-w-full">
-                {details?.matchFormat || match.matchFormat || match.matchType || 'T20'} • {details?.matchDescription || match.matchDescription || match.header || 'MATCH'}
+        {/* ══════════════════════════════════════
+            HEADER: Breadcrumb + Status + Actions
+            ══════════════════════════════════════ */}
+        <div className="flex-shrink-0 bg-navy-950/80 backdrop-blur-xl border-b border-white/[0.07] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+          {/* Left: breadcrumb + series */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+              <span className="hover:text-slate-300 cursor-pointer transition-colors">Live</span>
+              <ChevronRight className="w-3 h-3 flex-shrink-0" />
+              <span className="text-slate-400 truncate max-w-[200px]">
+                {details?.series || match.series || 'International Cricket'}
               </span>
-              
-              {isMatchLive(details || match) && (
-                <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase tracking-wide">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                  LIVE
-                </span>
-              )}
-
-              {isMatchComplete(details || match) && (
-                <Badge variant="default" size="sm" className="text-[9px] px-1.5 py-0.5">COMPLETED</Badge>
-              )}
-
-              {isMatchUpcoming(details || match) && (
-                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 uppercase">
-                  UPCOMING
-                </span>
-              )}
+              <ChevronRight className="w-3 h-3 flex-shrink-0" />
+              <span className="text-slate-300 font-semibold truncate max-w-[140px] hidden sm:block">
+                {t1Short} vs {t2Short}
+              </span>
             </div>
-
-            <p className="text-[11px] sm:text-xs text-slate-400 font-medium truncate">
-              {details?.series || match.series || 'International Cricket Series'}
-            </p>
+            {/* Status badges */}
+            {isLive && (
+              <span className="badge-live flex-shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                LIVE
+              </span>
+            )}
+            {isComplete && <span className="badge-result flex-shrink-0">RESULT</span>}
+            {isUpcoming && <span className="badge-upcoming flex-shrink-0">UPCOMING</span>}
           </div>
 
-          {/* Right Header Badges & Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-            {/* Venue Pill (Desktop) */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/5 text-xs text-slate-300 font-medium">
-              <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-              <span className="truncate max-w-[160px]">{venueDisplay}</span>
-            </div>
-
-            {/* Close Button */}
+          {/* Right: format + venue + refresh + close */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Venue (desktop) */}
+            {venueDisplay && (
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] text-slate-400">
+                <MapPin className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate max-w-[140px]">{venueDisplay}</span>
+              </div>
+            )}
+            {/* Refresh */}
+            <button
+              onClick={handleManualRefresh}
+              title="Refresh match data"
+              className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            {/* Close */}
             <button
               onClick={onClose}
-              className="p-2 sm:p-2.5 rounded-xl text-slate-400 hover:text-white bg-slate-900/80 hover:bg-slate-800 border border-white/10 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
-              aria-label="Close modal"
+              aria-label="Close"
+              className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* ── Main Scrollable Body ── */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3.5 sm:p-5 md:p-6 space-y-4 sm:space-y-5">
-          
-          {/* ── Scoreboard Arena ── */}
-          <div className="rounded-2xl bg-gradient-to-b from-[#0e1628] to-[#080d19] border border-white/[0.08] p-3.5 sm:p-6 shadow-xl">
-            <div className="grid grid-cols-1 md:grid-cols-11 gap-3 sm:gap-4 items-center">
-              
-              {/* Team 1 (Left) */}
-              <div className="md:col-span-5 flex items-center justify-between md:justify-start gap-3">
-                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+
+        {/* ══════════════════════════════════════
+            MAIN SCROLLABLE BODY
+            ══════════════════════════════════════ */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+
+          {/* ── SCOREBOARD HERO ── */}
+          <div className="bg-gradient-to-b from-navy-800 to-navy-900 border-b border-white/[0.06] px-4 sm:px-6 py-5 sm:py-6">
+
+            {/* Tournament + Format info */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <span className="text-[11px] text-slate-400 font-medium">
+                {details?.matchFormat || match.matchFormat || match.matchType || 'T20'} •
+              </span>
+              <span className="text-[11px] text-slate-400 truncate">
+                {details?.matchDescription || match.matchDescription || ''}
+              </span>
+            </div>
+
+            {/* 3-col scoreboard: Team1 | VS | Team2 */}
+            <div className="grid grid-cols-7 items-center gap-2">
+
+              {/* Team 1 */}
+              <div className="col-span-3">
+                <div className="flex items-center gap-2.5 mb-2">
                   <TeamBadge name={t1Name} shortName={t1Short} size="xl" />
                   <div className="min-w-0">
-                    <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">{t1Name}</h3>
-                    <span className="text-[11px] sm:text-xs text-slate-400 font-bold block">{t1Short}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-sm sm:text-base text-white truncate">{t1Name}</span>
+                      {isTeam1Batting && hasInningsStarted && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" title="Batting" />
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-500">{t1Short}</span>
                   </div>
                 </div>
-                
-                <div className="flex flex-col items-end md:items-start ml-auto md:ml-0 flex-shrink-0">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-xl sm:text-2xl md:text-3xl font-black text-white tabular-nums tracking-tight">
-                      {t1Score}
-                    </span>
-                    {t1Overs && (
-                      <span className="text-[11px] sm:text-xs font-semibold text-slate-400 tabular-nums">
-                        {t1Overs}
-                      </span>
-                    )}
-                  </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="score-display text-2xl sm:text-3xl md:text-4xl font-black">{t1Score}</span>
+                  {t1Overs && (
+                    <span className="overs-display">({t1Overs.replace(/[()]/g, '')} ov)</span>
+                  )}
                 </div>
+                {match.team1PrevScore && (
+                  <div className="text-[10px] text-slate-500 tabular-nums mt-0.5">& {match.team1PrevScore}</div>
+                )}
+                {isTeam1Batting && crr && (
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400 mt-1 block">
+                    CRR: {typeof crr === 'number' ? crr.toFixed(2) : crr}
+                  </span>
+                )}
               </div>
 
-              {/* Center VS Badge */}
-              <div className="md:col-span-1 flex justify-center py-1 md:py-0">
-                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-slate-800/80 border border-white/10 flex items-center justify-center text-[9px] sm:text-[10px] font-black text-slate-400 shadow-inner">
+              {/* VS Center */}
+              <div className="col-span-1 flex justify-center">
+                <div className="w-8 h-8 rounded-full bg-navy-700 border border-white/[0.08] flex items-center justify-center text-[10px] font-black text-slate-500">
                   VS
                 </div>
               </div>
 
-              {/* Team 2 (Right) */}
-              <div className="md:col-span-5 flex items-center justify-between md:justify-end gap-3 text-left md:text-right">
-                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 order-1 md:order-2">
-                  <div className="md:hidden flex-shrink-0">
-                    <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
+              {/* Team 2 */}
+              <div className="col-span-3 text-right">
+                <div className="flex items-center justify-end gap-2.5 mb-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {!isTeam1Batting && hasInningsStarted && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" title="Batting" />
+                      )}
+                      <span className="font-bold text-sm sm:text-base text-white truncate">{t2Name}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500">{t2Short}</span>
                   </div>
-                  <div className="min-w-0 md:text-right">
-                    <h3 className="text-sm sm:text-base md:text-lg font-black text-white truncate">{t2Name}</h3>
-                    <span className="text-[11px] sm:text-xs text-slate-400 font-bold block">{t2Short}</span>
-                  </div>
-                  <div className="hidden md:block flex-shrink-0">
-                    <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
-                  </div>
+                  <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
                 </div>
+                <div className="flex items-baseline justify-end gap-1.5">
+                  <span className="score-display text-2xl sm:text-3xl md:text-4xl font-black">{t2Score}</span>
+                  {t2Overs && (
+                    <span className="overs-display">({t2Overs.replace(/[()]/g, '')} ov)</span>
+                  )}
+                </div>
+                {match.team2PrevScore && (
+                  <div className="text-[10px] text-slate-500 tabular-nums mt-0.5">& {match.team2PrevScore}</div>
+                )}
+                {!isTeam1Batting && hasInningsStarted && crr && (
+                  <span className="text-[11px] font-mono font-semibold text-emerald-400 mt-1 block">
+                    CRR: {typeof crr === 'number' ? crr.toFixed(2) : crr}
+                  </span>
+                )}
+              </div>
+            </div>
 
-                <div className="flex flex-col items-end flex-shrink-0 text-right order-2 md:order-1 ml-auto md:ml-0">
-                  <div className="flex items-baseline md:justify-end gap-1.5">
-                    <span className="text-xl sm:text-2xl md:text-3xl font-black text-white tabular-nums tracking-tight">
-                      {t2Score}
-                    </span>
-                    {t2Overs && (
-                      <span className="text-[11px] sm:text-xs font-semibold text-slate-400 tabular-nums">
-                        {t2Overs}
-                      </span>
-                    )}
-                  </div>
+            {/* ── Status Strip ── */}
+            {matchStatusText && (
+              <div className="mt-4 pt-3 border-t border-white/[0.05] flex items-center justify-between gap-3">
+                <p className="text-xs sm:text-sm font-medium text-amber-300/90 flex-1">{matchStatusText}</p>
+                {rrr && (
+                  <span className="text-xs font-mono font-bold text-red-400 flex-shrink-0 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg">
+                    RRR: {rrr}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* ── Over Bead Strip ── */}
+            {recentBalls.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {recentBalls.map((b, i) => (
+                    <BallBeadInner key={i} ball={b} />
+                  ))}
                 </div>
               </div>
+            )}
 
-            </div>
-
-            {/* Match Status Chase Banner */}
-            <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-white/[0.05] text-center">
-              <span className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-300 block sm:inline">
-                {matchStatusText}
-              </span>
-            </div>
+            {/* ── 4-Cell Metrics Row: CRR | RRR | Target | Balls Left ── */}
+            {hasInningsStarted && (crr || rrr || target || ballsRemaining) && (
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                <div className="metric-cell">
+                  <span className="metric-value">{crr ? (typeof crr === 'number' ? crr.toFixed(2) : crr) : '–'}</span>
+                  <span className="metric-label">CRR</span>
+                </div>
+                <div className="metric-cell">
+                  <span className={`metric-value ${rrr ? 'text-red-400' : ''}`}>{rrr || '–'}</span>
+                  <span className="metric-label">RRR</span>
+                </div>
+                <div className="metric-cell">
+                  <span className="metric-value">{target || '–'}</span>
+                  <span className="metric-label">Target</span>
+                </div>
+                <div className="metric-cell">
+                  <span className="metric-value">{ballsRemaining !== null ? ballsRemaining : '–'}</span>
+                  <span className="metric-label">Balls Left</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── Sub-Navigation Tabs ── */}
-          <div className="grid grid-cols-3 sm:flex items-center gap-1 sm:gap-2 border-b border-white/10 pb-1">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
-                activeTab === 'overview'
-                  ? 'border-emerald-400 text-emerald-400'
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Overview</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('scorecard')}
-              className={`flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
-                activeTab === 'scorecard'
-                  ? 'border-emerald-400 text-emerald-400'
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              <ListFilter className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Scorecard</span>
-              {scorecards.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-800 text-slate-300 border border-white/10">
-                  {scorecards.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('commentary')}
-              className={`flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-[11px] sm:text-xs font-bold transition-all cursor-pointer border-b-2 -mb-1 whitespace-nowrap ${
-                activeTab === 'commentary'
-                  ? 'border-emerald-400 text-emerald-400'
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
-              <span>Commentary</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-800 text-slate-300 border border-white/10">
-                {commentaryCount}
-              </span>
-            </button>
+          {/* ── TAB BAR ── */}
+          <div className="flex items-center gap-0 border-b border-white/[0.07] bg-navy-900/80 px-3 overflow-x-auto custom-scrollbar">
+            {[
+              { id: 'overview',   label: 'Live',       icon: Activity },
+              { id: 'scorecard',  label: 'Scorecard',  icon: ListFilter, badge: scorecards.length > 0 ? scorecards.length : null },
+              { id: 'commentary', label: 'Commentary', icon: MessageSquare, badge: commentaryCount },
+            ].map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-all cursor-pointer -mb-px ${
+                    isActive
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/20'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[9px] font-bold text-slate-400">{tab.badge}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
+
+          {/* ── TAB CONTENT AREA ── */}
+          <div className="p-4 sm:p-5 space-y-4">
+
 
           {/* ── TAB 1: OVERVIEW ── */}
           {activeTab === 'overview' && (
@@ -1379,20 +1443,19 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
             </div>
           )}
 
-        </div>
+          </div>{/* ── end tab content area div ── */}
+        </div>{/* ── end scrollable body div ── */}
 
-        {/* ── Modal Action Footer Bar ── */}
-        <div className="bg-[#070b16]/95 backdrop-blur-xl border-t border-white/10 px-3.5 sm:px-6 py-2.5 sm:py-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
-          <div className="flex items-center gap-2 flex-1">
-
-
+        {/* ── FOOTER BAR ── */}
+        <div className="flex-shrink-0 bg-navy-950/80 backdrop-blur-xl border-t border-white/[0.07] px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             <Button
               variant="secondary"
               size="sm"
               onClick={handleManualRefresh}
               loading={loading}
               icon={RefreshCw}
-              className="cursor-pointer flex-1 sm:flex-initial justify-center text-xs"
+              className="cursor-pointer text-xs"
             >
               Refresh
             </Button>
@@ -1403,9 +1466,9 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
               href={match.cricbuzzLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 text-xs font-semibold transition-all cursor-pointer"
             >
-              <span>Full Cricbuzz Page</span>
+              <span>Full Scorecard</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}

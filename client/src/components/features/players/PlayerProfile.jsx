@@ -14,17 +14,18 @@ import {
   Layers,
   Sparkles,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Check
 } from 'lucide-react';
 import { Button } from '../../ui/Button';
-import { Badge } from '../../ui/Badge';
 import { useFavorites } from '../../../context/FavoritesContext';
 import { TeamBadge, getTeamTheme } from '../../../utils/teamUtils.jsx';
 import { StatRadarChart } from './StatRadarChart';
 
 export const PlayerProfile = ({ player, onCompareWithThisPlayer }) => {
+  const [profileTab, setProfileTab] = useState('overview'); // 'overview' | 'stats' | 'radar'
   const [activeFormat, setActiveFormat] = useState('odi'); // 'test', 'odi', 't20', 'ipl'
-  const [statTab, setStatTab] = useState('batting'); // 'batting', 'bowling'
+  const [statType, setStatType] = useState('batting'); // 'batting' | 'bowling'
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
 
   if (!player) return null;
@@ -53,236 +54,448 @@ export const PlayerProfile = ({ player, onCompareWithThisPlayer }) => {
     { key: 'ipl', label: 'IPL / T20' }
   ];
 
-  const countryTheme = getTeamTheme(player.country || 'International');
-
-  const b = player.batting_stats?.[activeFormat] || {};
-  const bw = player.bowling_stats?.[activeFormat] || {};
-
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       
-      {/* ── Player Spotlight Hero Banner ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#0e1628] via-[#0b1120] to-[#070b14] border border-white/[0.08] shadow-2xl p-6 sm:p-8">
-        {/* Pitch / Spotlight glow effects */}
-        <div className="absolute top-0 left-1/4 w-80 h-32 bg-emerald-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute top-0 right-1/4 w-80 h-32 bg-sky-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+      {/* ── Player Hero Showcase (Screen 3 style) ── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0c1324] via-[#090e1b] to-[#050811] border border-white/10 shadow-2xl p-6 sm:p-8">
+        {/* Glow ambient effects */}
+        <div className="absolute top-0 right-1/4 w-96 h-60 bg-blue-600/10 blur-[90px] pointer-events-none" />
+        <div className="absolute bottom-0 left-10 w-80 h-40 bg-emerald-500/5 blur-[80px] pointer-events-none" />
 
-        <div className="relative flex flex-col md:flex-row items-center md:items-start gap-6 z-10">
+        <div className="relative flex flex-col md:flex-row items-center md:items-stretch justify-between gap-6 z-10">
           
-          {/* Avatar / Portrait */}
-          <div className="relative flex-shrink-0">
-            <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-[#080d1a] p-1 border-2 border-emerald-500/30 shadow-2xl overflow-hidden flex items-center justify-center group">
+          {/* Left Bio Info */}
+          <div className="flex-1 flex flex-col justify-between text-center md:text-left">
+            <div>
+              {/* Badge & Nation */}
+              <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap mb-3">
+                <span className="px-3 py-1 rounded-md text-[11px] font-black uppercase tracking-wider bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                  {player.role || 'Cricketer'}
+                </span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/5 border border-white/10">
+                  <TeamBadge name={player.country} size="xs" />
+                  <span className="text-xs font-bold text-slate-200">{player.country}</span>
+                </div>
+              </div>
+
+              {/* Player Name */}
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight font-display">
+                {player.name}
+              </h1>
+
+              {/* Subtitle */}
+              <p className="text-xs sm:text-sm text-slate-400 mt-2">
+                {player.country} International • {player.personalInfo?.battingStyle || 'Right-handed Batter'}
+                {player.personalInfo?.bowlingStyle && ` • ${player.personalInfo.bowlingStyle}`}
+              </p>
+            </div>
+
+            {/* CTAs */}
+            <div className="flex items-center justify-center md:justify-start gap-3 mt-6 flex-wrap">
+              <button
+                onClick={toggleFavorite}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all shadow-lg ${
+                  isFav
+                    ? 'bg-blue-600 text-white shadow-blue-500/30 hover:bg-blue-700'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20'
+                }`}
+              >
+                {isFav ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>In Watchlist</span>
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="w-4 h-4" />
+                    <span>+ Add to Watchlist</span>
+                  </>
+                )}
+              </button>
+
+              {onCompareWithThisPlayer && (
+                <button
+                  onClick={() => onCompareWithThisPlayer(player.name)}
+                  className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-colors"
+                >
+                  Compare Player
+                </button>
+              )}
+
+              {player.cricbuzzUrl && (
+                <a
+                  href={player.cricbuzzUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 transition-colors"
+                  title="View Official Source"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Large Player Photo Showcase */}
+          <div className="relative flex-shrink-0 flex items-center justify-center">
+            <div className="w-36 h-36 sm:w-48 sm:h-48 rounded-2xl bg-[#070b14] border-2 border-white/10 shadow-2xl overflow-hidden flex items-center justify-center group relative">
               {player.image ? (
                 <img
                   src={player.image}
                   alt={player.name}
                   loading="lazy"
                   decoding="async"
-                  width="144"
-                  height="144"
-                  className="w-full h-full object-cover object-top rounded-xl group-hover:scale-105 transition-transform duration-300"
+                  width="192"
+                  height="192"
+                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
                 />
               ) : (
-                <User className="w-14 h-14 text-slate-500" />
+                <User className="w-20 h-20 text-slate-600" />
               )}
-            </div>
-
-            {/* Country Pill Overlay */}
-            <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:-right-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0d1424] border border-white/10 shadow-lg whitespace-nowrap">
-              <TeamBadge name={player.country} size="xs" />
-              <span className="text-[11px] font-bold text-slate-200">{player.country}</span>
+              {/* Subtle gradient vignette over photo */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
             </div>
           </div>
 
-          {/* Bio & Details */}
-          <div className="flex-1 text-center md:text-left min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap mb-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    {player.role || 'Cricketer'}
-                  </span>
-                  {player.personalInfo?.height && player.personalInfo.height !== '-' && (
-                    <span className="text-[11px] font-medium text-slate-400">
-                      • {player.personalInfo.height}
-                    </span>
-                  )}
-                </div>
-
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight leading-tight">
-                  {player.name}
-                </h1>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-center sm:justify-end gap-2.5 flex-wrap">
-                <Button
-                  variant={isFav ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={toggleFavorite}
-                  icon={Bookmark}
-                  className="cursor-pointer"
-                >
-                  {isFav ? 'In Watchlist' : 'Add to Watchlist'}
-                </Button>
-
-                {onCompareWithThisPlayer && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onCompareWithThisPlayer(player.name)}
-                    className="cursor-pointer"
-                  >
-                    Compare
-                  </Button>
-                )}
-
-                {player.cricbuzzUrl && (
-                  <a
-                    href={player.cricbuzzUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white border border-white/10 transition-colors"
-                    title="View on Cricbuzz"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Personal Bio Attributes Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5">
-              {player.personalInfo?.born && player.personalInfo.born !== '-' && (
-                <div className="stat-pill p-2.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Born</span>
-                  <span className="text-xs font-semibold text-white truncate block">{player.personalInfo.born}</span>
-                </div>
-              )}
-              {player.personalInfo?.birthPlace && player.personalInfo.birthPlace !== '-' && (
-                <div className="stat-pill p-2.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Birth Place</span>
-                  <span className="text-xs font-semibold text-white truncate block">{player.personalInfo.birthPlace}</span>
-                </div>
-              )}
-              {player.personalInfo?.battingStyle && player.personalInfo.battingStyle !== '-' && (
-                <div className="stat-pill p-2.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Batting</span>
-                  <span className="text-xs font-semibold text-emerald-300 truncate block">{player.personalInfo.battingStyle}</span>
-                </div>
-              )}
-              {player.personalInfo?.bowlingStyle && player.personalInfo.bowlingStyle !== '-' && (
-                <div className="stat-pill p-2.5">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Bowling</span>
-                  <span className="text-xs font-semibold text-sky-300 truncate block">{player.personalInfo.bowlingStyle}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Major Teams Tags */}
-            {player.personalInfo?.teams?.length > 0 && (
-              <div className="mt-4 flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Teams:</span>
-                {player.personalInfo.teams.slice(0, 6).map((tm, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[11px] px-2.5 py-0.5 rounded-lg bg-slate-900/90 border border-white/5 text-slate-300 font-medium"
-                  >
-                    {tm}
-                  </span>
-                ))}
-              </div>
-            )}
-
-          </div>
         </div>
       </div>
 
-      {/* ── ICC Rankings Section ── */}
-      {player.rankings && (
-        <div className="sports-card p-5">
-          <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-300 uppercase tracking-wider">
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span>Official ICC Rankings</span>
+      {/* ── Navigation Tabs (Overview | Career Stats | Radar Analytics) ── */}
+      <div className="flex items-center gap-2 border-b border-white/10 pb-1">
+        {[
+          { id: 'overview', label: 'Overview' },
+          { id: 'stats', label: 'Career Statistics' },
+          { id: 'radar', label: 'Radar Analytics' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setProfileTab(tab.id)}
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold transition-all relative ${
+              profileTab === tab.id
+                ? 'text-blue-400'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {tab.label}
+            {profileTab === tab.id && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab 1: OVERVIEW ── */}
+      {profileTab === 'overview' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            
+            {/* Left Column: Personal Information (7 cols) */}
+            <div className="md:col-span-7 bg-[#0b1120] border border-white/5 rounded-xl p-5 sm:p-6 shadow-xl">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-400" />
+                <span>Personal Information</span>
+              </h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-xs">
+                <div className="border-b border-white/5 pb-2.5">
+                  <span className="text-slate-500 block text-[11px] font-medium">Full Name</span>
+                  <span className="text-slate-200 font-bold mt-0.5 block">{player.name}</span>
+                </div>
+
+                <div className="border-b border-white/5 pb-2.5">
+                  <span className="text-slate-500 block text-[11px] font-medium">Born / Age</span>
+                  <span className="text-slate-200 font-bold mt-0.5 block">{player.personalInfo?.born || 'N/A'}</span>
+                </div>
+
+                <div className="border-b border-white/5 pb-2.5">
+                  <span className="text-slate-500 block text-[11px] font-medium">Birth Place</span>
+                  <span className="text-slate-200 font-bold mt-0.5 block">{player.personalInfo?.birthPlace || 'N/A'}</span>
+                </div>
+
+                <div className="border-b border-white/5 pb-2.5">
+                  <span className="text-slate-500 block text-[11px] font-medium">Height</span>
+                  <span className="text-slate-200 font-bold mt-0.5 block">{player.personalInfo?.height || 'N/A'}</span>
+                </div>
+
+                <div className="border-b border-white/5 pb-2.5">
+                  <span className="text-slate-500 block text-[11px] font-medium">Batting Style</span>
+                  <span className="text-emerald-400 font-bold mt-0.5 block">{player.personalInfo?.battingStyle || 'Right-handed'}</span>
+                </div>
+
+                <div className="border-b border-white/5 pb-2.5">
+                  <span className="text-slate-500 block text-[11px] font-medium">Bowling Style</span>
+                  <span className="text-sky-400 font-bold mt-0.5 block">{player.personalInfo?.bowlingStyle || 'Right-arm medium'}</span>
+                </div>
+              </div>
+
+              {/* Major Teams */}
+              {player.personalInfo?.teams?.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-white/5">
+                  <span className="text-[11px] text-slate-500 font-medium block mb-2">Major Teams Represented</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {player.personalInfo.teams.map((tm, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-white/5 border border-white/5 text-slate-300"
+                      >
+                        {tm}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: ICC Rankings (5 cols) */}
+            <div className="md:col-span-5 bg-[#0b1120] border border-white/5 rounded-xl p-5 sm:p-6 shadow-xl flex flex-col justify-between">
+              <div>
+                <h2 className="text-sm font-black text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>Official ICC Rankings</span>
+                </h2>
+
+                <div className="grid grid-cols-3 gap-2.5 text-center">
+                  <div className="bg-[#070b14] border border-white/5 rounded-lg p-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">ODI</span>
+                    <span className="text-2xl font-black text-blue-400 font-mono block">
+                      #{player.rankings?.batting?.odi || '--'}
+                    </span>
+                    <span className="text-[9px] text-slate-500 uppercase font-semibold">Batter</span>
+                  </div>
+
+                  <div className="bg-[#070b14] border border-white/5 rounded-lg p-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">TEST</span>
+                    <span className="text-2xl font-black text-blue-400 font-mono block">
+                      #{player.rankings?.batting?.test || '--'}
+                    </span>
+                    <span className="text-[9px] text-slate-500 uppercase font-semibold">Batter</span>
+                  </div>
+
+                  <div className="bg-[#070b14] border border-white/5 rounded-lg p-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">T20I</span>
+                    <span className="text-2xl font-black text-blue-400 font-mono block">
+                      #{player.rankings?.batting?.t20 || '--'}
+                    </span>
+                    <span className="text-[9px] text-slate-500 uppercase font-semibold">Batter</span>
+                  </div>
+                </div>
+
+                {/* Bowling Rankings if active bowler */}
+                {(player.rankings?.bowling?.odi || player.rankings?.bowling?.test) && (
+                  <div className="grid grid-cols-3 gap-2.5 text-center mt-3">
+                    <div className="bg-[#070b14] border border-white/5 rounded-lg p-3">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">ODI</span>
+                      <span className="text-2xl font-black text-emerald-400 font-mono block">
+                        #{player.rankings?.bowling?.odi || '--'}
+                      </span>
+                      <span className="text-[9px] text-slate-500 uppercase font-semibold">Bowler</span>
+                    </div>
+
+                    <div className="bg-[#070b14] border border-white/5 rounded-lg p-3">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">TEST</span>
+                      <span className="text-2xl font-black text-emerald-400 font-mono block">
+                        #{player.rankings?.bowling?.test || '--'}
+                      </span>
+                      <span className="text-[9px] text-slate-500 uppercase font-semibold">Bowler</span>
+                    </div>
+
+                    <div className="bg-[#070b14] border border-white/5 rounded-lg p-3">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">T20I</span>
+                      <span className="text-2xl font-black text-emerald-400 font-mono block">
+                        #{player.rankings?.bowling?.t20 || '--'}
+                      </span>
+                      <span className="text-[9px] text-slate-500 uppercase font-semibold">Bowler</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Updated Weekly</span>
+                <span className="text-amber-400/90 font-medium">ICC Official Database</span>
+              </div>
+            </div>
+
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 text-center">
-            <div className="stat-pill p-2.5">
-              <span className="text-[10px] text-slate-400 block font-semibold uppercase">Test Batting</span>
-              <span className="text-base font-black text-emerald-400 tabular-nums">#{player.rankings.batting?.test || '--'}</span>
+          {/* Quick Stats Overview Matrix Table (Screen 3 style) */}
+          <div className="bg-[#0b1120] border border-white/5 rounded-xl p-5 sm:p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Activity className="w-4 h-4 text-blue-400" />
+                <span>Career Highlights Across Formats</span>
+              </h2>
+              <span className="text-xs text-slate-400">International & League Records</span>
             </div>
-            <div className="stat-pill p-2.5">
-              <span className="text-[10px] text-slate-400 block font-semibold uppercase">ODI Batting</span>
-              <span className="text-base font-black text-emerald-400 tabular-nums">#{player.rankings.batting?.odi || '--'}</span>
-            </div>
-            <div className="stat-pill p-2.5">
-              <span className="text-[10px] text-slate-400 block font-semibold uppercase">T20I Batting</span>
-              <span className="text-base font-black text-emerald-400 tabular-nums">#{player.rankings.batting?.t20 || '--'}</span>
-            </div>
-            <div className="stat-pill p-2.5">
-              <span className="text-[10px] text-slate-400 block font-semibold uppercase">Test Bowling</span>
-              <span className="text-base font-black text-sky-400 tabular-nums">#{player.rankings.bowling?.test || '--'}</span>
-            </div>
-            <div className="stat-pill p-2.5">
-              <span className="text-[10px] text-slate-400 block font-semibold uppercase">ODI Bowling</span>
-              <span className="text-base font-black text-sky-400 tabular-nums">#{player.rankings.bowling?.odi || '--'}</span>
-            </div>
-            <div className="stat-pill p-2.5">
-              <span className="text-[10px] text-slate-400 block font-semibold uppercase">T20I Bowling</span>
-              <span className="text-base font-black text-sky-400 tabular-nums">#{player.rankings.bowling?.t20 || '--'}</span>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 text-slate-400 font-semibold uppercase text-[11px]">
+                    <th className="py-2.5 px-3">Format</th>
+                    <th className="py-2.5 px-3 text-right">Matches</th>
+                    <th className="py-2.5 px-3 text-right">Innings</th>
+                    <th className="py-2.5 px-3 text-right">Runs</th>
+                    <th className="py-2.5 px-3 text-right">Avg</th>
+                    <th className="py-2.5 px-3 text-right">SR</th>
+                    <th className="py-2.5 px-3 text-right">100s</th>
+                    <th className="py-2.5 px-3 text-right">50s</th>
+                    <th className="py-2.5 px-3 text-right">HS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5 font-mono">
+                  {formats.map(({ key, label }) => {
+                    const st = player.batting_stats?.[key] || {};
+                    return (
+                      <tr key={key} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-2.5 px-3 font-sans font-bold text-white uppercase">{label}</td>
+                        <td className="py-2.5 px-3 text-right text-slate-300">{st.matches || '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-slate-300">{st.innings || '-'}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-400">{st.runs || '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-teal-300">{st.average || '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-amber-300">{st.strike_rate || '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-purple-300 font-bold">{st.hundreds || '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-blue-300">{st.fifties || '-'}</td>
+                        <td className="py-2.5 px-3 text-right text-rose-300">{st.highest_score || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Career Statistics & Radar Analytics ── */}
-      <div className="sports-card p-6 space-y-6">
-        
-        {/* Header and Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-4">
-          <div>
-            <h2 className="text-lg font-black text-white flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-400" />
-              <span>Career Performance Statistics</span>
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">Authoritative international match records across all formats</p>
-          </div>
+      {/* ── Tab 2: CAREER STATISTICS ── */}
+      {profileTab === 'stats' && (
+        <div className="bg-[#0b1120] border border-white/5 rounded-xl p-5 sm:p-6 shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <h2 className="text-base font-black text-white">Full Career Matrix</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Toggle discipline and inspect deep batting and bowling breakdowns</p>
+            </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
             {/* Batting vs Bowling Toggle */}
-            <div className="flex items-center bg-[#070b14] p-1 rounded-xl border border-white/10">
+            <div className="flex items-center bg-[#070b14] p-1 rounded-lg border border-white/10">
               <button
-                onClick={() => setStatTab('batting')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                  statTab === 'batting' ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20' : 'text-slate-400 hover:text-white'
+                onClick={() => setStatType('batting')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  statType === 'batting' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Zap className="w-3.5 h-3.5" />
                 <span>Batting</span>
               </button>
               <button
-                onClick={() => setStatTab('bowling')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                  statTab === 'bowling' ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20' : 'text-slate-400 hover:text-white'
+                onClick={() => setStatType('bowling')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  statType === 'bowling' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <Target className="w-3.5 h-3.5" />
                 <span>Bowling</span>
               </button>
             </div>
+          </div>
+
+          {/* Stats Table for all 4 formats */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-slate-400 font-semibold uppercase text-[11px]">
+                  <th className="py-3 px-3">Format</th>
+                  <th className="py-3 px-3 text-right">Matches</th>
+                  <th className="py-3 px-3 text-right">Innings</th>
+                  {statType === 'batting' ? (
+                    <>
+                      <th className="py-3 px-3 text-right">Runs</th>
+                      <th className="py-3 px-3 text-right">NO</th>
+                      <th className="py-3 px-3 text-right">Avg</th>
+                      <th className="py-3 px-3 text-right">SR</th>
+                      <th className="py-3 px-3 text-right">HS</th>
+                      <th className="py-3 px-3 text-right">100s</th>
+                      <th className="py-3 px-3 text-right">50s</th>
+                      <th className="py-3 px-3 text-right">4s</th>
+                      <th className="py-3 px-3 text-right">6s</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="py-3 px-3 text-right">Wickets</th>
+                      <th className="py-3 px-3 text-right">BBI</th>
+                      <th className="py-3 px-3 text-right">Econ</th>
+                      <th className="py-3 px-3 text-right">Avg</th>
+                      <th className="py-3 px-3 text-right">SR</th>
+                      <th className="py-3 px-3 text-right">4w</th>
+                      <th className="py-3 px-3 text-right">5w</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 font-mono">
+                {formats.map(({ key, label }) => {
+                  const data = statType === 'batting'
+                    ? (player.batting_stats?.[key] || {})
+                    : (player.bowling_stats?.[key] || {});
+
+                  return (
+                    <tr key={key} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="py-3 px-3 font-sans font-bold text-white uppercase">{label}</td>
+                      <td className="py-3 px-3 text-right text-slate-300">{data.matches || '-'}</td>
+                      <td className="py-3 px-3 text-right text-slate-300">{data.innings || '-'}</td>
+                      {statType === 'batting' ? (
+                        <>
+                          <td className="py-3 px-3 text-right font-black text-emerald-400">{data.runs || '-'}</td>
+                          <td className="py-3 px-3 text-right text-slate-400">{data.not_outs || '-'}</td>
+                          <td className="py-3 px-3 text-right text-teal-300 font-bold">{data.average || '-'}</td>
+                          <td className="py-3 px-3 text-right text-amber-300">{data.strike_rate || '-'}</td>
+                          <td className="py-3 px-3 text-right text-rose-300">{data.highest_score || '-'}</td>
+                          <td className="py-3 px-3 text-right text-purple-300 font-bold">{data.hundreds || '-'}</td>
+                          <td className="py-3 px-3 text-right text-blue-300">{data.fifties || '-'}</td>
+                          <td className="py-3 px-3 text-right text-slate-300">{data.fours || '-'}</td>
+                          <td className="py-3 px-3 text-right text-slate-300">{data.sixes || '-'}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="py-3 px-3 text-right font-black text-sky-400">{data.wickets || '-'}</td>
+                          <td className="py-3 px-3 text-right text-amber-300 font-bold">{data.best_bowling_innings || '-'}</td>
+                          <td className="py-3 px-3 text-right text-emerald-400">{data.economy || '-'}</td>
+                          <td className="py-3 px-3 text-right text-teal-300">{data.average || '-'}</td>
+                          <td className="py-3 px-3 text-right text-slate-300">{data.strike_rate || '-'}</td>
+                          <td className="py-3 px-3 text-right text-purple-300">{data.four_wickets || '-'}</td>
+                          <td className="py-3 px-3 text-right text-rose-300 font-bold">{data.five_wickets || '-'}</td>
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab 3: RADAR ANALYTICS ── */}
+      {profileTab === 'radar' && (
+        <div className="bg-[#0b1120] border border-white/5 rounded-xl p-5 sm:p-6 shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <h2 className="text-base font-black text-white">Spider Radar Performance Model</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Normalized statistical benchmarking against elite world standards</p>
+            </div>
 
             {/* Format Selector Pills */}
-            <div className="flex items-center bg-[#070b14] p-1 rounded-xl border border-white/10">
+            <div className="flex items-center gap-1.5 bg-[#070b14] p-1 rounded-lg border border-white/10">
               {formats.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setActiveFormat(key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                    activeFormat === key ? 'bg-white/20 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                    activeFormat === key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   {label}
@@ -290,173 +503,12 @@ export const PlayerProfile = ({ player, onCompareWithThisPlayer }) => {
               ))}
             </div>
           </div>
-        </div>
 
-        {/* Radar / Visual Analytics + Stat Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          
-          {/* Visual Radar Column (approx 35%) */}
-          <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-white/[0.06] pb-6 lg:pb-0 lg:pr-6 flex flex-col items-center">
-            <div className="w-full flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Performance Profile ({activeFormat.toUpperCase()})
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 text-slate-300">
-                {statTab.toUpperCase()}
-              </span>
-            </div>
-            <StatRadarChart player1={player} format={activeFormat} mode={statTab} />
+          <div className="max-w-xl mx-auto py-4">
+            <StatRadarChart player1={player} format={activeFormat} mode="batting" />
           </div>
-
-          {/* Comprehensive Stats Matrix (approx 65%) */}
-          <div className="lg:col-span-8">
-            {statTab === 'batting' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Matches / Innings</span>
-                  <span className="text-xl font-black text-white tabular-nums">
-                    {b.matches || '-'} <span className="text-slate-500 font-normal text-sm">/</span> {b.innings || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Total Runs</span>
-                  <span className="text-xl font-black text-emerald-400 tabular-nums">
-                    {b.runs || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Batting Average</span>
-                  <span className="text-xl font-black text-teal-300 tabular-nums">
-                    {b.average || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Strike Rate</span>
-                  <span className="text-xl font-black text-amber-300 tabular-nums">
-                    {b.strike_rate || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Highest Score</span>
-                  <span className="text-xl font-black text-rose-300 tabular-nums">
-                    {b.highest_score || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Centuries / Fifties (100s / 50s)</span>
-                  <span className="text-xl font-black text-purple-300 tabular-nums">
-                    {b.hundreds || '-'} <span className="text-slate-500 font-normal text-sm">/</span> {b.fifties || '-'}
-                  </span>
-                </div>
-
-                {b.fours && (
-                  <div className="stat-pill p-3.5">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Boundaries (4s / 6s)</span>
-                    <span className="text-lg font-black text-sky-300 tabular-nums">
-                      {b.fours || '-'} <span className="text-slate-500 font-normal text-sm">/</span> {b.sixes || '-'}
-                    </span>
-                  </div>
-                )}
-
-                {b.not_outs && (
-                  <div className="stat-pill p-3.5">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Not Outs</span>
-                    <span className="text-lg font-black text-slate-200 tabular-nums">
-                      {b.not_outs || '-'}
-                    </span>
-                  </div>
-                )}
-
-                {b.balls && (
-                  <div className="stat-pill p-3.5">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Balls Faced</span>
-                    <span className="text-lg font-black text-slate-200 tabular-nums">
-                      {b.balls || '-'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Matches / Innings</span>
-                  <span className="text-xl font-black text-white tabular-nums">
-                    {bw.matches || '-'} <span className="text-slate-500 font-normal text-sm">/</span> {bw.innings || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Wickets</span>
-                  <span className="text-xl font-black text-sky-400 tabular-nums">
-                    {bw.wickets || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Economy Rate</span>
-                  <span className="text-xl font-black text-emerald-400 tabular-nums">
-                    {bw.economy || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Bowling Average</span>
-                  <span className="text-xl font-black text-teal-300 tabular-nums">
-                    {bw.average || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">Best Bowling (BBI)</span>
-                  <span className="text-xl font-black text-amber-300 tabular-nums">
-                    {bw.best_bowling_innings || '-'}
-                  </span>
-                </div>
-
-                <div className="stat-pill p-3.5">
-                  <span className="text-[11px] text-slate-400 block font-semibold">5W / 4W Hauls</span>
-                  <span className="text-xl font-black text-purple-300 tabular-nums">
-                    {bw.five_wickets || '-'} <span className="text-slate-500 font-normal text-sm">/</span> {bw.four_wickets || '-'}
-                  </span>
-                </div>
-
-                {bw.balls && (
-                  <div className="stat-pill p-3.5">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Balls Bowled</span>
-                    <span className="text-lg font-black text-slate-200 tabular-nums">
-                      {bw.balls || '-'}
-                    </span>
-                  </div>
-                )}
-
-                {bw.maidens && (
-                  <div className="stat-pill p-3.5">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Maidens</span>
-                    <span className="text-lg font-black text-slate-200 tabular-nums">
-                      {bw.maidens || '-'}
-                    </span>
-                  </div>
-                )}
-
-                {bw.strike_rate && (
-                  <div className="stat-pill p-3.5">
-                    <span className="text-[11px] text-slate-400 block font-semibold">Strike Rate</span>
-                    <span className="text-lg font-black text-slate-200 tabular-nums">
-                      {bw.strike_rate || '-'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
         </div>
-      </div>
+      )}
 
     </div>
   );

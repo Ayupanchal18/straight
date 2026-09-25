@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Scale, ArrowRight, User, AlertCircle, Sparkles, Trophy } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Scale, ArrowRight, User, AlertCircle, Sparkles, Trophy, BarChart3, Zap, Target } from 'lucide-react';
 import cricketApi from '../../../services/api';
 import { Button } from '../../ui/Button';
 import { Skeleton } from '../../ui/Skeleton';
@@ -7,7 +7,76 @@ import { TeamBadge } from '../../../utils/teamUtils.jsx';
 import { StatRadarChart } from '../players/StatRadarChart';
 import { useSEO } from '../../../hooks/useSEO';
 
-export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 = 'Rohit Sharma' }) => {
+// Horizontal Comparison Row Component (Screen 5 style)
+const CompareBarRow = ({ label, val1, val2, higherBetter = true, lowerBetter = false }) => {
+  const num1 = parseFloat(val1) || 0;
+  const num2 = parseFloat(val2) || 0;
+  const max = Math.max(num1, num2);
+
+  // Proportional percentages (relative to max, or 50/50 if zero)
+  const pct1 = max > 0 ? (num1 / max) * 100 : 0;
+  const pct2 = max > 0 ? (num2 / max) * 100 : 0;
+
+  const p1Wins = (higherBetter && num1 > num2) || (lowerBetter && num1 > 0 && (num1 < num2 || num2 === 0));
+  const p2Wins = (higherBetter && num2 > num1) || (lowerBetter && num2 > 0 && (num2 < num1 || num1 === 0));
+
+  return (
+    <div className="py-3 px-3 sm:px-4 hover:bg-white/[0.02] transition-colors border-b border-white/5 last:border-b-0">
+      <div className="grid grid-cols-12 items-center gap-2 sm:gap-4">
+        {/* Player 1 Value (Left) */}
+        <div className="col-span-2 text-right">
+          <span className={`text-xs sm:text-sm font-black font-mono tabular-nums ${
+            p1Wins ? 'text-blue-400' : 'text-slate-300'
+          }`}>
+            {val1 !== undefined && val1 !== null && val1 !== '' ? val1 : '-'}
+          </span>
+        </div>
+
+        {/* Player 1 Bar (goes towards center, flex-end) */}
+        <div className="col-span-3 flex justify-end">
+          <div className="w-full bg-navy-950 h-2 rounded-full overflow-hidden flex justify-end border border-white/5">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                p1Wins ? 'bg-blue-500 shadow-sm shadow-blue-500/50' : 'bg-blue-500/40'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(5, pct1))}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Label (Center) */}
+        <div className="col-span-2 text-center">
+          <span className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider block truncate">
+            {label}
+          </span>
+        </div>
+
+        {/* Player 2 Bar (goes away from center, flex-start) */}
+        <div className="col-span-3 flex justify-start">
+          <div className="w-full bg-navy-950 h-2 rounded-full overflow-hidden flex justify-start border border-white/5">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                p2Wins ? 'bg-sky-400 shadow-sm shadow-sky-400/50' : 'bg-sky-400/40'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(5, pct2))}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Player 2 Value (Right) */}
+        <div className="col-span-2 text-left">
+          <span className={`text-xs sm:text-sm font-black font-mono tabular-nums ${
+            p2Wins ? 'text-sky-400' : 'text-slate-300'
+          }`}>
+            {val2 !== undefined && val2 !== null && val2 !== '' ? val2 : '-'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 = 'Babar Azam' }) => {
   const [player1Name, setPlayer1Name] = useState(defaultPlayer1);
   const [player2Name, setPlayer2Name] = useState(defaultPlayer2);
   const [comparisonData, setComparisonData] = useState(null);
@@ -15,6 +84,7 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
   const [error, setError] = useState(null);
   const [format, setFormat] = useState('odi'); // 'test', 'odi', 't20', 'ipl'
   const [mode, setMode] = useState('batting'); // 'batting', 'bowling'
+  const [viewType, setViewType] = useState('bars'); // 'bars' | 'radar'
 
   useSEO({
     title: player1Name && player2Name 
@@ -42,219 +112,253 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
     }
   };
 
+  useEffect(() => {
+    handleCompare(defaultPlayer1, defaultPlayer2);
+  }, []);
+
   const p1 = comparisonData?.player1;
   const p2 = comparisonData?.player2;
 
-  const formats = ['test', 'odi', 't20', 'ipl'];
+  const formats = [
+    { key: 'test', label: 'Test' },
+    { key: 'odi', label: 'ODI' },
+    { key: 't20', label: 'T20I' },
+    { key: 'ipl', label: 'IPL / T20' },
+  ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Comparison Selector Card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#0e1628] via-[#0b1120] to-[#070b14] border border-white/[0.08] shadow-2xl p-6 sm:p-8">
-        <div className="max-w-3xl mx-auto space-y-4 text-center relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto px-2 sm:px-4">
+      {/* ── Selector / Header Bar (Screen 5 style) ── */}
+      <div className="bg-[#0b1120] border border-white/5 rounded-xl p-5 sm:p-6 shadow-xl backdrop-blur-md">
+        <div className="max-w-4xl mx-auto space-y-4 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider">
             <Scale className="w-3.5 h-3.5" />
             <span>Head-to-Head Player Comparison</span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight font-display">
             Compare Cricket Legends & Stars
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto">
-            Side-by-side performance analytics, batting averages, strike rates, bowling figures, and official ICC rankings.
+          <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+            Direct statistical comparison across international formats with normalized comparative indicators.
           </p>
 
-          {/* Form */}
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center pt-2 max-w-xl mx-auto">
+          {/* Dual Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center pt-2 max-w-2xl mx-auto">
             <div className="sm:col-span-2">
               <input
                 type="text"
                 value={player1Name}
                 onChange={(e) => setPlayer1Name(e.target.value)}
-                placeholder="First Player (e.g. Virat Kohli)"
-                className="w-full px-4 py-2.5 bg-[#080d1a] border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/60 transition-colors"
+                placeholder="Player 1 (e.g. Virat Kohli)"
+                className="w-full px-3.5 py-2.5 bg-[#070b14] border border-white/10 rounded-lg text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
 
-            <div className="text-center font-black text-emerald-400 text-sm">VS</div>
+            <div className="text-center font-black text-blue-400 text-xs sm:text-sm font-mono py-1">
+              VS
+            </div>
 
             <div className="sm:col-span-2">
               <input
                 type="text"
                 value={player2Name}
                 onChange={(e) => setPlayer2Name(e.target.value)}
-                placeholder="Second Player (e.g. Rohit Sharma)"
-                className="w-full px-4 py-2.5 bg-[#080d1a] border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/60 transition-colors"
+                placeholder="Player 2 (e.g. Babar Azam)"
+                className="w-full px-3.5 py-2.5 bg-[#070b14] border border-white/10 rounded-lg text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
           </div>
 
           <div className="pt-2">
             <Button
-              size="lg"
+              size="md"
               loading={loading}
               onClick={() => handleCompare()}
               icon={Scale}
-              className="px-8 cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 shadow-lg shadow-blue-500/20"
             >
-              Compare Now
+              Compare Players
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Error display */}
+      {/* Error state */}
       {error && (
-        <div className="sports-card p-4 border-rose-500/30 bg-rose-500/10 text-rose-300 flex items-center justify-between gap-3 max-w-2xl mx-auto">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-300 flex items-center justify-between gap-3 max-w-2xl mx-auto">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400" />
             <span className="text-xs sm:text-sm">{error}</span>
           </div>
           <Button size="sm" variant="danger" onClick={() => handleCompare()}>Retry</Button>
         </div>
       )}
 
-      {/* Loading */}
+      {/* Loading Skeletons */}
       {loading && (
-        <div className="space-y-4 animate-pulse">
+        <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Skeleton className="h-48 rounded-2xl" />
-            <Skeleton className="h-48 rounded-2xl" />
+            <Skeleton className="h-32 rounded-xl bg-navy-900/60" />
+            <Skeleton className="h-32 rounded-xl bg-navy-900/60" />
           </div>
-          <Skeleton className="h-96 rounded-2xl" />
+          <Skeleton className="h-96 rounded-xl bg-navy-900/60" />
         </div>
       )}
 
       {/* Comparison Results */}
       {p1 && p2 && !loading && (
         <div className="space-y-6">
-          {/* Top Player Cards Header */}
+          
+          {/* Side-by-Side Player Showcase Cards (Screen 5 style) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Player 1 Card */}
-            <div className="sports-card p-5 border-emerald-500/30">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-[#080d1a] p-1 border border-emerald-500/40 flex-shrink-0 overflow-hidden">
-                  {p1.image ? (
-                    <img 
-                      src={p1.image} 
-                      alt={p1.name} 
-                      loading="lazy"
-                      decoding="async"
-                      width="64"
-                      height="64"
-                      className="w-full h-full object-cover object-top rounded-lg" 
-                    />
-                  ) : (
-                    <User className="w-8 h-8 text-slate-500 m-auto mt-3" />
-                  )}
+            <div className="bg-[#0b1120] border border-blue-500/30 rounded-xl p-4 sm:p-5 shadow-xl flex items-center gap-4">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-[#070b14] border border-blue-500/40 flex-shrink-0 overflow-hidden relative">
+                {p1.image ? (
+                  <img 
+                    src={p1.image} 
+                    alt={p1.name} 
+                    loading="lazy"
+                    decoding="async"
+                    width="80"
+                    height="80"
+                    className="w-full h-full object-cover object-top" 
+                  />
+                ) : (
+                  <User className="w-8 h-8 text-slate-500 m-auto mt-4" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <TeamBadge name={p1.country} size="xs" />
+                  <span className="text-xs text-blue-400 font-bold">{p1.country}</span>
+                  <span className="text-slate-600 text-xs">•</span>
+                  <span className="text-xs text-slate-400 font-medium truncate">{p1.role}</span>
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <TeamBadge name={p1.country} size="xs" />
-                    <span className="text-xs text-emerald-400 font-bold">{p1.country}</span>
-                    <span className="text-slate-500 text-xs">•</span>
-                    <span className="text-xs text-slate-300 font-semibold">{p1.role}</span>
-                  </div>
-                  <h3 className="text-xl font-black text-white truncate">{p1.name}</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Bat: {p1.personalInfo?.battingStyle || '-'}</p>
-                </div>
+                <h3 className="text-lg sm:text-xl font-black text-white truncate font-display">{p1.name}</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                  {p1.personalInfo?.battingStyle || 'Right-handed'} • {p1.personalInfo?.bowlingStyle || 'Bowler'}
+                </p>
               </div>
             </div>
 
             {/* Player 2 Card */}
-            <div className="sports-card p-5 border-sky-500/30">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-[#080d1a] p-1 border border-sky-500/40 flex-shrink-0 overflow-hidden">
-                  {p2.image ? (
-                    <img 
-                      src={p2.image} 
-                      alt={p2.name} 
-                      loading="lazy"
-                      decoding="async"
-                      width="64"
-                      height="64"
-                      className="w-full h-full object-cover object-top rounded-lg" 
-                    />
-                  ) : (
-                    <User className="w-8 h-8 text-slate-500 m-auto mt-3" />
-                  )}
+            <div className="bg-[#0b1120] border border-sky-400/30 rounded-xl p-4 sm:p-5 shadow-xl flex items-center gap-4">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-[#070b14] border border-sky-400/40 flex-shrink-0 overflow-hidden relative">
+                {p2.image ? (
+                  <img 
+                    src={p2.image} 
+                    alt={p2.name} 
+                    loading="lazy"
+                    decoding="async"
+                    width="80"
+                    height="80"
+                    className="w-full h-full object-cover object-top" 
+                  />
+                ) : (
+                  <User className="w-8 h-8 text-slate-500 m-auto mt-4" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <TeamBadge name={p2.country} size="xs" />
+                  <span className="text-xs text-sky-400 font-bold">{p2.country}</span>
+                  <span className="text-slate-600 text-xs">•</span>
+                  <span className="text-xs text-slate-400 font-medium truncate">{p2.role}</span>
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <TeamBadge name={p2.country} size="xs" />
-                    <span className="text-xs text-sky-400 font-bold">{p2.country}</span>
-                    <span className="text-slate-500 text-xs">•</span>
-                    <span className="text-xs text-slate-300 font-semibold">{p2.role}</span>
-                  </div>
-                  <h3 className="text-xl font-black text-white truncate">{p2.name}</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Bat: {p2.personalInfo?.battingStyle || '-'}</p>
-                </div>
+                <h3 className="text-lg sm:text-xl font-black text-white truncate font-display">{p2.name}</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+                  {p2.personalInfo?.battingStyle || 'Right-handed'} • {p2.personalInfo?.bowlingStyle || 'Bowler'}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Controls Bar */}
-          <div className="glass-card p-4 flex flex-wrap items-center justify-between gap-4">
+          {/* Controls Bar: Format Pills & Mode & View Toggle */}
+          <div className="bg-[#0b1120] border border-white/5 rounded-xl p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            {/* Format selector */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">Format:</span>
-              <div className="flex items-center bg-pitch-900 p-1 rounded-xl border border-slate-700">
-                {formats.map((fmt) => (
+              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Format:</span>
+              <div className="flex items-center bg-[#070b14] p-1 rounded-lg border border-white/10">
+                {formats.map(({ key, label }) => (
                   <button
-                    key={fmt}
-                    onClick={() => setFormat(fmt)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer ${
-                      format === fmt ? 'bg-cricket-500 text-pitch-900' : 'text-slate-400 hover:text-white'
+                    key={key}
+                    onClick={() => setFormat(key)}
+                    className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                      format === key ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {fmt}
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">Metric:</span>
-              <div className="flex items-center bg-pitch-900 p-1 rounded-xl border border-slate-700">
+            {/* Discipline & View Toggle */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center bg-[#070b14] p-1 rounded-lg border border-white/10">
                 <button
                   onClick={() => setMode('batting')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                    mode === 'batting' ? 'bg-cricket-500 text-pitch-900' : 'text-slate-400 hover:text-white'
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-all ${
+                    mode === 'batting' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Batting
+                  <Zap className="w-3 h-3" />
+                  <span>Batting</span>
                 </button>
                 <button
                   onClick={() => setMode('bowling')}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                    mode === 'bowling' ? 'bg-cricket-500 text-pitch-900' : 'text-slate-400 hover:text-white'
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-all ${
+                    mode === 'bowling' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Bowling
+                  <Target className="w-3 h-3" />
+                  <span>Bowling</span>
+                </button>
+              </div>
+
+              <div className="flex items-center bg-[#070b14] p-1 rounded-lg border border-white/10">
+                <button
+                  onClick={() => setViewType('bars')}
+                  className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                    viewType === 'bars' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Bars
+                </button>
+                <button
+                  onClick={() => setViewType('radar')}
+                  className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                    viewType === 'radar' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Radar
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Radar & Visual Comparison */}
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-bold text-slate-200 uppercase mb-4 text-center">
-              Comparative Analysis ({format.toUpperCase()})
-            </h3>
-            <StatRadarChart player1={p1} player2={p2} format={format} mode={mode} />
-          </div>
+          {/* View: Horizontal Comparison Bars (Screen 5 style) */}
+          {viewType === 'bars' && (
+            <div className="bg-[#0b1120] border border-white/5 rounded-xl overflow-hidden shadow-xl">
+              <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider font-display">
+                  Career Comparison ({format.toUpperCase()})
+                </h3>
+                <div className="flex items-center gap-4 text-xs font-bold">
+                  <span className="flex items-center gap-1.5 text-blue-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    {p1.name}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-sky-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
+                    {p2.name}
+                  </span>
+                </div>
+              </div>
 
-          {/* Comparison Detailed Table */}
-          <div className="glass-card p-6 overflow-x-auto">
-            <h3 className="text-base font-bold text-white mb-4">Metric by Metric Breakdown</h3>
-            <table className="w-full text-left border-collapse text-xs sm:text-sm">
-              <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
-                  <th className="py-3 px-4 text-cricket-400 font-bold">{p1.name}</th>
-                  <th className="py-3 px-4 text-center font-bold text-slate-300">Statistic ({format.toUpperCase()})</th>
-                  <th className="py-3 px-4 text-right text-sky-400 font-bold">{p2.name}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
+              <div className="divide-y divide-white/5">
                 {mode === 'batting' ? (
                   <>
                     {(() => {
@@ -269,28 +373,19 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
                         { label: 'Highest Score', val1: s1.highest_score, val2: s2.highest_score },
                         { label: 'Centuries (100s)', val1: s1.hundreds, val2: s2.hundreds, higherBetter: true },
                         { label: 'Fifties (50s)', val1: s1.fifties, val2: s2.fifties, higherBetter: true },
+                        { label: 'Boundaries (4s)', val1: s1.fours, val2: s2.fours, higherBetter: true },
+                        { label: 'Sixes (6s)', val1: s1.sixes, val2: s2.sixes, higherBetter: true },
                       ];
 
-                      return metrics.map((m, idx) => {
-                        const v1 = parseFloat(m.val1) || 0;
-                        const v2 = parseFloat(m.val2) || 0;
-                        const p1Better = m.higherBetter && v1 > v2;
-                        const p2Better = m.higherBetter && v2 > v1;
-
-                        return (
-                          <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                            <td className={`py-3 px-4 font-semibold ${p1Better ? 'text-cricket-400 font-bold' : 'text-slate-200'}`}>
-                              {m.val1 || '-'} {p1Better && '👑'}
-                            </td>
-                            <td className="py-3 px-4 text-center font-medium text-slate-400">
-                              {m.label}
-                            </td>
-                            <td className={`py-3 px-4 text-right font-semibold ${p2Better ? 'text-sky-400 font-bold' : 'text-slate-200'}`}>
-                              {p2Better && '👑 '} {m.val2 || '-'}
-                            </td>
-                          </tr>
-                        );
-                      });
+                      return metrics.map((m, idx) => (
+                        <CompareBarRow
+                          key={idx}
+                          label={m.label}
+                          val1={m.val1}
+                          val2={m.val2}
+                          higherBetter={m.higherBetter}
+                        />
+                      ));
                     })()}
                   </>
                 ) : (
@@ -305,35 +400,38 @@ export const PlayerCompare = ({ defaultPlayer1 = 'Virat Kohli', defaultPlayer2 =
                         { label: 'Economy Rate', val1: s1.economy, val2: s2.economy, lowerBetter: true },
                         { label: 'Bowling Average', val1: s1.average, val2: s2.average, lowerBetter: true },
                         { label: 'Best Bowling (BBI)', val1: s1.best_bowling_innings, val2: s2.best_bowling_innings },
-                        { label: '5 Wicket Hauls', val1: s1.five_wickets, val2: s2.five_wickets, higherBetter: true },
+                        { label: '5-Wicket Hauls', val1: s1.five_wickets, val2: s2.five_wickets, higherBetter: true },
                       ];
 
-                      return metrics.map((m, idx) => {
-                        const v1 = parseFloat(m.val1) || 0;
-                        const v2 = parseFloat(m.val2) || 0;
-                        const p1Better = (m.higherBetter && v1 > v2) || (m.lowerBetter && v1 > 0 && (v1 < v2 || v2 === 0));
-                        const p2Better = (m.higherBetter && v2 > v1) || (m.lowerBetter && v2 > 0 && (v2 < v1 || v1 === 0));
-
-                        return (
-                          <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                            <td className={`py-3 px-4 font-semibold ${p1Better ? 'text-cricket-400 font-bold' : 'text-slate-200'}`}>
-                              {m.val1 || '-'} {p1Better && '👑'}
-                            </td>
-                            <td className="py-3 px-4 text-center font-medium text-slate-400">
-                              {m.label}
-                            </td>
-                            <td className={`py-3 px-4 text-right font-semibold ${p2Better ? 'text-sky-400 font-bold' : 'text-slate-200'}`}>
-                              {p2Better && '👑 '} {m.val2 || '-'}
-                            </td>
-                          </tr>
-                        );
-                      });
+                      return metrics.map((m, idx) => (
+                        <CompareBarRow
+                          key={idx}
+                          label={m.label}
+                          val1={m.val1}
+                          val2={m.val2}
+                          higherBetter={m.higherBetter}
+                          lowerBetter={m.lowerBetter}
+                        />
+                      ));
                     })()}
                   </>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          )}
+
+          {/* View: Radar Chart */}
+          {viewType === 'radar' && (
+            <div className="bg-[#0b1120] border border-white/5 rounded-xl p-6 shadow-xl">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider text-center mb-4 font-display">
+                Spider Radar Model ({format.toUpperCase()})
+              </h3>
+              <div className="max-w-xl mx-auto">
+                <StatRadarChart player1={p1} player2={p2} format={format} mode={mode} />
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </div>

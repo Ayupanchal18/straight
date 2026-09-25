@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { FavoritesProvider } from './context/FavoritesContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Navbar } from './components/layout/Navbar';
 import { SearchPalette } from './components/layout/SearchPalette';
 import { Footer } from './components/layout/Footer';
@@ -153,68 +154,73 @@ export default function App() {
   }, []);
 
   return (
-    <FavoritesProvider>
-      <div className="min-h-screen flex flex-col bg-[#070a12] stadium-bg selection:bg-emerald-500 selection:text-slate-950">
-        {/* Navigation */}
-        <Navbar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onOpenSearch={handleOpenSearchPalette}
-        />
+    <ThemeProvider>
+      <FavoritesProvider>
+        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-navy-950 text-slate-900 dark:text-slate-100 stadium-bg selection:bg-blue-500 selection:text-white transition-colors duration-200">
+          {/* Navigation */}
+          <Navbar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onOpenSearch={handleOpenSearchPalette}
+          />
 
-        {/* Command Palette / Spotlight Search */}
-        <SearchPalette
-          isOpen={searchPaletteOpen}
-          onClose={() => setSearchPaletteOpen(false)}
-          matches={liveScoresHook.matches}
-          scheduleData={scheduleCache}
-          onSelectTab={setActiveTab}
-          onSelectMatch={(match) => {
-            // Navigate to live tab — the match detail modal is handled inside LiveScoresList
-            setActiveTab('live');
-          }}
-          onSearchPlayer={handleSearchPlayer}
-        />
+          {/* Command Palette / Spotlight Search */}
+          <SearchPalette
+            isOpen={searchPaletteOpen}
+            onClose={() => setSearchPaletteOpen(false)}
+            matches={liveScoresHook.matches}
+            scheduleData={scheduleCache}
+            onSelectTab={setActiveTab}
+            onSelectMatch={(match) => {
+              // Navigate to live tab — the match detail modal is handled inside LiveScoresList
+              setActiveTab('live');
+            }}
+            onSearchPlayer={handleSearchPlayer}
+          />
 
-        {/* Main Content Area */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-6 pb-24 md:pb-12">
-          {activeTab === 'live' && (
-            <LiveScoresList 
-              onSelectTab={setActiveTab}
-              onSearchPlayer={handleSelectPlayerFromWatchlist}
-              sharedLiveScores={liveScoresHook}
-            />
-          )}
-
-          <Suspense fallback={<TabLoadingFallback />}>
-            {activeTab === 'schedule' && <ScheduleList />}
-
-            {activeTab === 'players' && (
-              <PlayerSearch
-                initialQuery={selectedPlayerQuery}
-                onCompare={handleCompareFromProfile}
-              />
-            )}
-
-            {activeTab === 'compare' && (
-              <PlayerCompare
-                defaultPlayer1={comparePlayer1}
-                defaultPlayer2={comparePlayer2}
-              />
-            )}
-
-            {activeTab === 'favorites' && (
-              <FavoritesView
-                onSelectPlayer={handleSelectPlayerFromWatchlist}
+          {/* Main Content Area */}
+          <main className="flex-1 w-full pb-24 md:pb-12">
+            {activeTab === 'live' && (
+              <LiveScoresList
                 onSelectTab={setActiveTab}
+                onSearchPlayer={handleSelectPlayerFromWatchlist}
+                onOpenSearch={handleOpenSearchPalette}
+                sharedLiveScores={liveScoresHook}
               />
             )}
-          </Suspense>
-        </main>
 
-        {/* Footer */}
-        <Footer />
-      </div>
-    </FavoritesProvider>
+            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-6">
+              <Suspense fallback={<TabLoadingFallback />}>
+                {activeTab === 'schedule' && <ScheduleList />}
+
+                {activeTab === 'players' && (
+                  <PlayerSearch
+                    initialQuery={selectedPlayerQuery}
+                    onCompare={handleCompareFromProfile}
+                  />
+                )}
+
+                {activeTab === 'compare' && (
+                  <PlayerCompare
+                    defaultPlayer1={comparePlayer1}
+                    defaultPlayer2={comparePlayer2}
+                  />
+                )}
+
+                {activeTab === 'favorites' && (
+                  <FavoritesView
+                    onSelectPlayer={handleSelectPlayerFromWatchlist}
+                    onSelectTab={setActiveTab}
+                  />
+                )}
+              </Suspense>
+            </div>
+          </main>
+
+          {/* Footer */}
+          <Footer />
+        </div>
+      </FavoritesProvider>
+    </ThemeProvider>
   );
 }

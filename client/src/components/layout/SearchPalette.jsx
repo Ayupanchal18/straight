@@ -14,6 +14,7 @@ import {
   Zap,
   TrendingUp,
   MapPin,
+  Coffee,
 } from 'lucide-react';
 import { fuzzyFilter, highlightMatches, expandQuery, fuzzyScore } from '../../utils/fuzzySearch';
 import { isMatchLive, isMatchComplete, isMatchUpcoming, TeamBadge } from '../../utils/teamUtils.jsx';
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { id: 'players', label: 'Player Stats', description: 'Search any cricket player profile', icon: User },
   { id: 'compare', label: 'H2H Compare', description: 'Head-to-head player comparison', icon: Scale },
   { id: 'favorites', label: 'Watchlist', description: 'Your saved matches & players', icon: Bookmark },
+  { id: 'support', label: 'Buy Me a Coffee', description: 'Support independent CricketHub development', icon: Coffee },
 ];
 
 const POPULAR_PLAYERS = [
@@ -222,7 +224,7 @@ export const SearchPalette = ({
         id: 'search-player-direct',
         type: 'player-search',
         title: `Search player: "${q}"`,
-        subtitle: 'Look up any cricket player on Cricbuzz',
+        subtitle: 'Look up cricket player career statistics & records',
         icon: ArrowRight,
         data: { name: q },
       }],

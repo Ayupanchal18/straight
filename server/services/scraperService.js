@@ -20,6 +20,7 @@ const client = axios.create({
 
 const path = require('path');
 const fs = require('fs');
+const { resolveBroadcastIntelligence } = require('./broadcastService');
 
 // Master Player Registry loaded from verified database (1,100+ players & legends)
 let PLAYER_REGISTRY = {};
@@ -91,7 +92,7 @@ function evaluateMatchState(m, header = {}, mini = {}) {
       rawTextLower.includes(' - preview') ||
       rawTextLower.includes(' - scheduled') ||
       rawTextLower.includes('starts at') ||
-      (!m.team1Score && !m.team2Score && (!m.inningsScores || m.inningsScores.length === 0) && (!m.currentBatsmen || m.currentBatsmen.length === 0) && !statusLower.includes('live') && !statusLower.includes('opt to bat') && !statusLower.includes('opt to bowl'))
+      (!m.team1Score && !m.team2Score && (!m.inningsScores || m.inningsScores.length === 0) && (!m.currentBatsmen || m.currentBatsmen.length === 0) && !statusLower.includes('live') && !statusLower.includes('opt to bat') && !statusLower.includes('opt to bowl') && !statusLower.includes('stumps') && !statusLower.includes('day') && !statusLower.includes('trail') && !statusLower.includes('lead') && !statusLower.includes('break') && !statusLower.includes('lunch') && !statusLower.includes('tea'))
     )
   );
 
@@ -402,12 +403,29 @@ async function scrapeLiveMatches() {
         m.isComplete = classification.isComplete;
         m.isUpcoming = classification.isUpcoming;
 
+        // Broadcast overview summary
+        const bLight = resolveBroadcastIntelligence({
+          series: m.series,
+          title: `${m.team1} vs ${m.team2}`,
+          matchFormat: m.matchFormat,
+        });
+        m.broadcastSummary = bLight.summary;
+        m.broadcastPlatforms = (bLight.platforms || []).slice(0, 4);
+
       } catch (e) {
         // Fall back to title classification
         const classification = evaluateMatchState(m);
         m.isLive = classification.isLive;
         m.isComplete = classification.isComplete;
         m.isUpcoming = classification.isUpcoming;
+
+        const bLight = resolveBroadcastIntelligence({
+          series: m.series,
+          title: `${m.team1} vs ${m.team2}`,
+          matchFormat: m.matchFormat,
+        });
+        m.broadcastSummary = bLight.summary;
+        m.broadcastPlatforms = (bLight.platforms || []).slice(0, 4);
       }
     });
 
@@ -655,7 +673,7 @@ async function scrapeMatchDetails(matchUrl) {
     results.recentCommentary = commList.slice(0, 15).map(c => {
       const overNbr = c.ballMetric ? Math.floor(c.ballMetric) : c.overNumber;
       const ballNbr = c.ballMetric ? Math.round((c.ballMetric - Math.floor(c.ballMetric)) * 10) : c.ballNbr;
-      const text = (c.commText || '').replace(/<[^>]*>/g, '').trim();
+      const text = (c.commText || '').replace(/<[^>]*>/g, '').replace(/cricbuzz/gi, 'CricketHub').trim();
       const lowerText = text.toLowerCase();
 
       // Normalize event (can be Array ['four', 'all'], String 'FOUR', or undefined)
@@ -826,34 +844,65 @@ async function scrapeMatchDetails(matchUrl) {
     }
   }
 
-  // 2. Enrich with venue from HTML Place/SportsEvent structured data
+  // 2. Enrich with venue and Cricbuzz facts page data (structured data + facts guide)
+  let factsHtml = null;
   try {
-    const { data: html } = await client.get(matchUrl);
-    const $ = cheerio.load(html);
-    $('script[type="application/ld+json"]').each((_, s) => {
-      try {
-        const json = JSON.parse($(s).html());
-        if (json['@type'] === 'Place' && json.name) {
-          results.venue = {
-            name: json.name,
-            city: json.address?.addressLocality || '',
-            country: json.address?.addressCountry || '',
-          };
-        } else if (json.location && json.location.name) {
-          results.venue = {
-            name: json.location.name,
-            city: json.location.address?.addressLocality || '',
-            country: json.location.address?.addressCountry || '',
-          };
-        } else if ((json['@type'] === 'SportsEvent' || json.competitor) && json.location) {
-          results.venue = {
-            name: typeof json.location === 'string' ? json.location : json.location.name || '',
-            city: json.location.address?.addressLocality || '',
-            country: json.location.address?.addressCountry || '',
-          };
+    const factsUrl = matchUrl.includes('/live-cricket-scores/')
+      ? matchUrl.replace('/live-cricket-scores/', '/cricket-match-facts/')
+      : null;
+
+    // Fetch match page and facts page in parallel with fast timeouts
+    const [pageRes, factsRes] = await Promise.allSettled([
+      client.get(matchUrl, { timeout: 4500 }),
+      factsUrl ? client.get(factsUrl, { timeout: 4500 }) : Promise.resolve(null),
+    ]);
+
+    const html = pageRes.status === 'fulfilled' ? pageRes.value?.data : null;
+    if (factsRes.status === 'fulfilled' && factsRes.value?.data) {
+      factsHtml = factsRes.value.data;
+    }
+
+    if (html) {
+      const $ = cheerio.load(html);
+      $('script[type="application/ld+json"]').each((_, s) => {
+        try {
+          const json = JSON.parse($(s).html());
+          if (json['@type'] === 'Place' && json.name) {
+            results.venue = {
+              name: json.name,
+              city: json.address?.addressLocality || '',
+              country: json.address?.addressCountry || '',
+            };
+          } else if (json.location && json.location.name) {
+            results.venue = {
+              name: json.location.name,
+              city: json.location.address?.addressLocality || '',
+              country: json.location.address?.addressCountry || '',
+            };
+          } else if ((json['@type'] === 'SportsEvent' || json.competitor) && json.location) {
+            results.venue = {
+              name: typeof json.location === 'string' ? json.location : json.location.name || '',
+              city: json.location.address?.addressLocality || '',
+              country: json.location.address?.addressCountry || '',
+            };
+          }
+        } catch (e) {}
+      });
+    }
+
+    // Fallback venue from facts HTML if structured data was missing
+    if (!results.venue && factsHtml) {
+      const $f = cheerio.load(factsHtml);
+      $f('.facts-row-grid, div').each((_, el) => {
+        const t = $f(el).text().replace(/\s+/g, ' ').trim();
+        if (t.startsWith('Venue') && t.length > 5 && t.length < 80) {
+          const vClean = t.replace(/^Venue\s*:?\s*/i, '').trim();
+          if (vClean) {
+            results.venue = { name: vClean, city: '', country: '' };
+          }
         }
-      } catch (e) {}
-    });
+      });
+    }
 
     if (results.venue) {
       const vParts = [results.venue.name, results.venue.city || results.venue.country].filter(Boolean);
@@ -865,6 +914,23 @@ async function scrapeMatchDetails(matchUrl) {
     }
   } catch (e) {
     // venue remains null — non-critical
+  }
+
+  // 3. Resolve Complete Multi-Region OTT & TV Broadcasting Intelligence
+  try {
+    results.broadcast = resolveBroadcastIntelligence({
+      series: results.series,
+      title: `${results.team1?.name || ''} vs ${results.team2?.name || ''}`,
+      matchFormat: results.matchFormat,
+      cricbuzzFactsHtml: factsHtml,
+    });
+  } catch (bErr) {
+    results.broadcast = {
+      available: false,
+      summary: 'Broadcasting guide currently unavailable',
+      platforms: [],
+      regions: [],
+    };
   }
 
   results.matchUrl = matchUrl;

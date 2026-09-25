@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Radio,
   Calendar,
-  User,
   Scale,
   Bookmark,
   Search,
@@ -24,6 +23,7 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
     { id: 'players', label: 'Players' },
     { id: 'compare', label: 'Compare' },
     { id: 'favorites', label: 'Watchlist', count: favorites.length },
+    { id: 'support', label: 'Buy Me a Coffee', icon: '☕' },
   ];
 
   return (
@@ -52,19 +52,27 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
             {/* ── Desktop Navigation Links ── */}
             <nav className="hidden lg:flex items-center h-full gap-1">
               {navLinks.map((item, idx) => {
-                const isActive = activeTab === item.id;
+                const isActive = activeTab === item.id || (item.id === 'support' && activeTab === 'coffee');
+                const isCoffee = item.id === 'support';
                 return (
                   <button
                     key={`${item.id}-${idx}`}
                     onClick={() => setActiveTab(item.id)}
                     className={`nav-link flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] transition-all duration-150 cursor-pointer relative ${
                       isActive
-                        ? 'text-blue-600 dark:text-white font-bold'
-                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
+                        ? isCoffee
+                          ? 'text-amber-600 dark:text-amber-400 font-bold'
+                          : 'text-blue-600 dark:text-white font-bold'
+                        : isCoffee
+                          ? 'text-amber-600/90 hover:text-amber-700 dark:text-amber-400/90 dark:hover:text-amber-300 font-semibold'
+                          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 font-medium'
                     }`}
                   >
                     {item.isLive && (
                       <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                    )}
+                    {item.icon && (
+                      <span className="text-xs leading-none flex-shrink-0">{item.icon}</span>
                     )}
                     <span>{item.label}</span>
                     {item.count !== undefined && item.count > 0 && (
@@ -74,7 +82,9 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
                     )}
                     {/* Active underline indicator */}
                     {isActive && (
-                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-blue-500 rounded-full" />
+                      <span className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 rounded-full ${
+                        isCoffee ? 'bg-amber-500' : 'bg-blue-500'
+                      }`} />
                     )}
                   </button>
                 );
@@ -108,13 +118,23 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
                 <Search className="w-4 h-4" />
               </button>
 
+              {/* Buy Me a Coffee / Support button */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('support')}
+                className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-2xs select-none ${
+                  activeTab === 'support' || activeTab === 'coffee'
+                    ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-amber-500/20 font-extrabold'
+                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/25'
+                }`}
+                title="Support CricketHub - Buy Me a Coffee"
+              >
+                <span>☕</span>
+                <span className="hidden md:inline">Support</span>
+              </button>
+
               {/* Theme Toggle Button */}
               <ThemeToggle />
-
-              {/* User Avatar */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-[11px] font-bold text-white shadow-sm cursor-pointer hover:scale-105 transition-transform select-none flex-shrink-0">
-                C
-              </div>
 
               {/* Mobile menu toggle */}
               <button
@@ -132,21 +152,29 @@ export const Navbar = ({ activeTab, setActiveTab, onOpenSearch }) => {
         {mobileMenuOpen && (
           <div className="lg:hidden border-t border-slate-200 dark:border-white/[0.07] bg-white/98 dark:bg-navy-900/98 px-4 py-3 space-y-1 shadow-lg animate-slide-up">
             {navLinks.map((item, idx) => {
-              const isActive = activeTab === item.id;
+              const isActive = activeTab === item.id || (item.id === 'support' && activeTab === 'coffee');
+              const isCoffee = item.id === 'support';
               return (
                 <button
                   key={`mob-${item.id}-${idx}`}
                   onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
                   className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-white font-bold'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.04]'
+                      ? isCoffee
+                        ? 'bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400 font-bold'
+                        : 'bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-white font-bold'
+                      : isCoffee
+                        ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 font-semibold'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                   }`}
                 >
                   {item.isLive && (
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                   )}
-                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.icon && (
+                    <span className="text-base">{item.icon}</span>
+                  )}
+                  <span className={`flex-1 text-left ${isCoffee ? 'font-bold' : ''}`}>{item.label}</span>
                   {item.count !== undefined && item.count > 0 && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-400">
                       {item.count}

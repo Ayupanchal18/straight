@@ -13,8 +13,10 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
+import { useTheme } from '../../../context/ThemeContext';
 
 export const StatRadarChart = ({ player1, player2, format = 'odi', mode = 'batting' }) => {
+  const { isDark } = useTheme();
   if (!player1) return null;
 
   if (mode === 'batting') {
@@ -53,9 +55,18 @@ export const StatRadarChart = ({ player1, player2, format = 'odi', mode = 'batti
       <div className="w-full h-72">
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
-            <PolarGrid stroke="#334155" />
-            <PolarAngleAxis dataKey="subject" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 11 }} />
-            <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={false} />
+            <PolarGrid stroke={isDark ? '#334155' : '#e2e8f0'} />
+            <PolarAngleAxis 
+              dataKey="subject" 
+              stroke={isDark ? '#94a3b8' : '#64748b'} 
+              tick={{ fill: isDark ? '#cbd5e1' : '#334155', fontSize: 11 }} 
+            />
+            <PolarRadiusAxis 
+              angle={30} 
+              domain={[0, 100]} 
+              stroke={isDark ? '#475569' : '#cbd5e1'} 
+              tick={false} 
+            />
             <Radar
               name={player1.name}
               dataKey={player1.name}
@@ -105,11 +116,16 @@ export const StatRadarChart = ({ player1, player2, format = 'odi', mode = 'batti
     <div className="w-full h-72">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={barData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
-          <XAxis dataKey="metric" stroke="#94a3b8" />
-          <YAxis stroke="#94a3b8" />
+          <XAxis dataKey="metric" stroke={isDark ? '#94a3b8' : '#64748b'} />
+          <YAxis stroke={isDark ? '#94a3b8' : '#64748b'} />
           <Tooltip 
-            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem' }} 
-            itemStyle={{ color: '#f8fafc' }}
+            contentStyle={{ 
+              backgroundColor: isDark ? '#0f172a' : '#ffffff', 
+              borderColor: isDark ? '#334155' : '#e2e8f0', 
+              borderRadius: '0.75rem',
+              boxShadow: isDark ? '0 10px 15px -3px rgba(0,0,0,0.5)' : '0 10px 15px -3px rgba(0,0,0,0.1)'
+            }} 
+            itemStyle={{ color: isDark ? '#f8fafc' : '#0f172a' }}
           />
           <Legend />
           <Bar dataKey={player1.name} fill="#22c55e" radius={[6, 6, 0, 0]} />

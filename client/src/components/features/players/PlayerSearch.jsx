@@ -79,24 +79,23 @@ export const PlayerSearch = ({ initialQuery = '', onCompare }) => {
     <div className="space-y-6">
       
       {/* ── Search Header Arena ── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[#0e1628] via-[#0b1120] to-[#070b14] border border-white/[0.08] shadow-2xl p-6 sm:p-8 text-center">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-white via-slate-50 to-blue-50/30 dark:from-[#0e1628] dark:via-[#0b1120] dark:to-[#070b14] border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-2xl p-6 sm:p-8 text-center transition-colors">
         {/* Pitch light accents */}
-        <div className="absolute top-0 left-1/3 w-96 h-28 bg-emerald-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute top-0 right-1/3 w-96 h-28 bg-sky-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+        <div className="absolute top-0 left-1/3 w-96 h-28 bg-blue-500/5 dark:bg-emerald-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-1/3 w-96 h-28 bg-sky-500/5 dark:bg-sky-500/10 blur-3xl pointer-events-none" />
 
         <div className="max-w-2xl mx-auto space-y-4 relative z-10">
           
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             <span>International Player Analytics</span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight font-display">
             Search Any Cricket Player
           </h1>
           
-          <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto">
             Comprehensive career batting averages, bowling records, ICC rankings, and bio from authoritative international cricket databases.
           </p>
 
@@ -109,14 +108,14 @@ export const PlayerSearch = ({ initialQuery = '', onCompare }) => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="e.g. Virat Kohli, Rohit Sharma, Steve Smith, Babar Azam..."
-                className="w-full pl-10 pr-4 py-2.5 sm:py-3 bg-[#080d1a] border border-white/10 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/60 transition-colors shadow-inner"
+                className="w-full pl-10 pr-4 py-2.5 sm:py-3 bg-white dark:bg-[#080d1a] border border-slate-200 dark:border-white/10 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
               />
             </div>
             <Button
               type="submit"
               size="lg"
               loading={loading}
-              className="px-6 cursor-pointer"
+              className="px-6 cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-bold"
             >
               Search
             </Button>
@@ -124,8 +123,8 @@ export const PlayerSearch = ({ initialQuery = '', onCompare }) => {
 
           {/* Trending Cricketers Quick Select */}
           <div className="pt-2">
-            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-400 mb-2.5">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 mb-2.5">
+              <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
               <span>Trending Cricketers:</span>
             </div>
             
@@ -140,8 +139,8 @@ export const PlayerSearch = ({ initialQuery = '', onCompare }) => {
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                     query.toLowerCase() === name.toLowerCase()
-                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-500/20'
-                      : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border-white/5 hover:border-white/15'
+                      ? 'bg-blue-500/20 border-blue-500/50 text-blue-600 dark:text-blue-300 shadow-sm'
+                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/5 hover:border-slate-300'
                   }`}
                 >
                   <TeamBadge name={country} size="xs" />
@@ -156,10 +155,10 @@ export const PlayerSearch = ({ initialQuery = '', onCompare }) => {
 
       {/* Error state */}
       {error && (
-        <div className="sports-card p-4 border-rose-500/30 bg-rose-500/10 text-rose-300 flex items-center justify-between gap-3 max-w-2xl mx-auto">
+        <div className="sports-card p-4 border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300 flex items-center justify-between gap-3 max-w-2xl mx-auto">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <span className="text-xs sm:text-sm">{error}</span>
+            <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-500" />
+            <span className="text-xs sm:text-sm font-medium">{error}</span>
           </div>
           <Button size="sm" variant="danger" onClick={() => searchPlayer()}>Try Again</Button>
         </div>

@@ -113,5 +113,11 @@ This is a simple Flask web application that provides an API and a user-friendly 
   </li>
 </ol>
 
-<H2>Disclaimer ⚠️</H2>
-This project is strictly for educational purposes. Not intended for production use.
+<h2>Legal & Educational Fair-Use Notice ⚖️</h2>
+
+This repository and application are developed strictly for **educational, non-commercial, and portfolio demonstration purposes**.
+
+1. **Non-Commercial Fair Use:** This project is free, open-source, and does not charge subscription fees, run commercial advertisements, or sell access to third-party data. It is intended to demonstrate full-stack engineering, reactive UI design, and caching architectures.
+2. **Data & Intellectual Property Rights:** All cricket match statistics, scores, player profiles, schedules, team logos, and trademarks displayed within this application remain the exclusive property of their respective copyright holders, official cricket governing bodies (e.g., ICC, BCCI, ECB, Cricket Australia), and original content providers.
+3. **No Affiliation:** CricketHub is an independent developer project and is not endorsed, affiliated, or associated with any cricket board, league, or commercial entity.
+4. **Takedown & Inquiries:** If you are an intellectual property holder and have concerns regarding content displayed by this educational demo, please open an issue or contact the repository maintainer for prompt resolution.

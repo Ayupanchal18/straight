@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import {
   RefreshCw,
   Radio,
@@ -19,9 +19,11 @@ import { HeroSection } from './HeroSection';
 import { FeaturedMatchHero } from './FeaturedMatchHero';
 import { TrendingWidget } from './TrendingWidget';
 import { PopularTeamsWidget } from './PopularTeamsWidget';
-import { MatchDetailModal } from './MatchDetailModal';
 import { Button } from '../../ui/Button';
 import { Skeleton } from '../../ui/Skeleton';
+
+// Code-split heavy modal to keep initial live scores page lightweight and bloatware-free
+const MatchDetailModal = lazy(() => import('./MatchDetailModal').then(m => ({ default: m.MatchDetailModal })));
 import { isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/teamUtils.jsx';
 
 import { useSEO } from '../../../hooks/useSEO';
@@ -30,7 +32,7 @@ import { generateMatchSchema } from '../../../utils/seo';
 export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, sharedLiveScores }) => {
   // Use shared live scores from App if available, otherwise fallback to own hook
   const ownHook = useLiveScores(30000, !sharedLiveScores);
-  const { matches, loading, error, lastUpdated, refresh } = sharedLiveScores || ownHook;
+  const { matches, loading, isRefreshing, error, lastUpdated, adaptiveInterval, recentWicketEvent, refresh } = sharedLiveScores || ownHook;
   const { pinnedMatchId, unpinMatch, favorites } = useFavorites();
 
   const [filter, setFilter]           = useState('all');
@@ -41,13 +43,36 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
     try { return localStorage.getItem('cricket_show_sidebar') !== 'false'; }
     catch { return true; }
   });
+  const [justRefreshed, setJustRefreshed] = useState(false);
 
-  // Dynamic SEO
+  const handleManualRefresh = async () => {
+    await refresh();
+    setJustRefreshed(true);
+    setTimeout(() => setJustRefreshed(false), 2200);
+  };
+
+  // Dynamic Browser Tab Title & SEO Telemetry
   const featuredLiveMatch = matches.find(m => isMatchLive(m)) || matches[0];
+  
+  const dynamicTitle = useMemo(() => {
+    if (recentWicketEvent) {
+      return `⚡ WICKET! ${recentWicketEvent.team} ${recentWicketEvent.score} | CricketHub`;
+    }
+    if (featuredLiveMatch && isMatchLive(featuredLiveMatch)) {
+      const t1 = featuredLiveMatch.team1ShortName || featuredLiveMatch.team1;
+      const t2 = featuredLiveMatch.team2ShortName || featuredLiveMatch.team2;
+      const s1 = featuredLiveMatch.team1Score;
+      const s2 = featuredLiveMatch.team2Score;
+      if (s1 || s2) {
+        return `🔴 ${t1} ${s1 || ''} vs ${t2} ${s2 || ''} | CricketHub`.replace(/\s+/g, ' ');
+      }
+      return `🔴 LIVE: ${t1} vs ${t2} | CricketHub`;
+    }
+    return 'Cricket Hub | Live Cricket Scores, Schedules & Stats';
+  }, [recentWicketEvent, featuredLiveMatch]);
+
   useSEO({
-    title: featuredLiveMatch
-      ? `LIVE: ${featuredLiveMatch.team1} vs ${featuredLiveMatch.team2} (${featuredLiveMatch.status || 'Live Scores'}) | CricketHub`
-      : 'Live Cricket Scores & Ball-by-Ball Commentary | CricketHub',
+    title: dynamicTitle,
     description: featuredLiveMatch
       ? `Live Cricket Score: ${featuredLiveMatch.team1} vs ${featuredLiveMatch.team2}. ${featuredLiveMatch.status || 'Live'}. Ball-by-ball updates, commentary and stats.`
       : 'Real-time live cricket scores, ball-by-ball commentary, match fixtures, and scorecard analytics.',
@@ -125,12 +150,12 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
 
   // ── Filter tabs config ──
   const filterTabs = [
-    { id: 'all',           label: `All (${matches.length})`,      activeClass: 'bg-white/10 text-white border-white/20' },
-    { id: 'live',          label: `Live (${liveCount})`,           activeClass: 'bg-red-500/15 text-red-300 border-red-500/30', dot: true },
-    { id: 'upcoming',      label: `Upcoming (${upcomingCount})`,   activeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
-    { id: 'international', label: 'International',                  activeClass: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
-    { id: 't20',           label: 'T20 Leagues',                   activeClass: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
-    { id: 'completed',     label: `Results (${completedCount})`,   activeClass: 'bg-slate-800 text-white border-slate-600' },
+    { id: 'all',           label: `All (${matches.length})`,      activeClass: 'bg-slate-200 text-slate-900 border-slate-300 dark:bg-white/10 dark:text-white dark:border-white/20' },
+    { id: 'live',          label: `Live (${liveCount})`,           activeClass: 'bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/30', dot: true },
+    { id: 'upcoming',      label: `Upcoming (${upcomingCount})`,   activeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30' },
+    { id: 'international', label: 'International',                  activeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30' },
+    { id: 't20',           label: 'T20 Leagues',                   activeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30' },
+    { id: 'completed',     label: `Results (${completedCount})`,   activeClass: 'bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-white dark:border-slate-600' },
   ];
 
   return (
@@ -171,7 +196,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
                   filter === tab.id
                     ? tab.activeClass
-                    : 'text-slate-400 hover:text-slate-200 border-transparent hover:bg-white/[0.04]'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border-transparent hover:bg-slate-100 dark:hover:bg-white/[0.04]'
                 }`}
               >
                 {tab.dot && filter === tab.id && (
@@ -186,35 +211,51 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             {/* Local search */}
             <div className="relative flex-1 sm:w-52 min-w-[160px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Filter by team, series..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full bg-navy-800/80 border border-white/[0.09] rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/40 transition-colors"
+                className="w-full bg-white dark:bg-navy-800/80 border border-slate-200 dark:border-white/[0.09] rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors shadow-2xs"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-white transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
                 >
                   <X className="w-3 h-3" />
                 </button>
               )}
             </div>
 
-            {/* Refresh */}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={refresh}
-              loading={loading}
-              icon={RefreshCw}
-              aria-label="Refresh live scores"
-              className="flex-shrink-0"
+            {/* Live Sync Status indicator */}
+            <div 
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-navy-800/80 border border-slate-200 dark:border-white/[0.08] text-[11px] font-semibold text-slate-500 dark:text-slate-400 select-none"
+              title={`Adaptive heartbeat: checking every ${Math.round((adaptiveInterval || 30000) / 1000)}s based on pitch activity`}
             >
-              <span className="hidden sm:inline">Refresh</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                isRefreshing ? 'bg-amber-400 animate-spin' : 'bg-emerald-500 animate-pulse'
+              }`} />
+              <span className="font-mono text-[10px]">
+                {isRefreshing ? 'Syncing...' : `Pulse ${Math.round((adaptiveInterval || 30000) / 1000)}s`}
+              </span>
+            </div>
+
+            {/* Refresh (Hard Refresh bypassing cache) */}
+            <Button
+              variant={justRefreshed ? "outline" : "secondary"}
+              size="sm"
+              onClick={handleManualRefresh}
+              loading={loading || isRefreshing}
+              icon={RefreshCw}
+              title="Force hard refresh: fetches freshest live scores directly from pitch"
+              aria-label="Refresh live scores"
+              className={`flex-shrink-0 transition-all ${justRefreshed ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold' : ''}`}
+            >
+              <span className="hidden sm:inline">
+                {justRefreshed ? '✓ Synced' : 'Refresh'}
+              </span>
             </Button>
 
             {/* Toggle sidebar */}
@@ -224,8 +265,8 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
               title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer flex-shrink-0 ${
                 showSidebar
-                  ? 'bg-navy-800/80 border-white/[0.09] text-slate-400 hover:text-white'
-                  : 'bg-blue-500/15 border-blue-500/30 text-blue-300'
+                  ? 'bg-slate-100 hover:bg-slate-200 dark:bg-navy-800/80 dark:hover:bg-navy-700 border-slate-200 dark:border-white/[0.09] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  : 'bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-300'
               }`}
             >
               {showSidebar
@@ -245,7 +286,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
             {/* Section header with date stepper */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-baseline gap-2">
-                <h2 className="text-lg font-bold text-white tracking-tight">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                   {filter === 'all'           ? 'All Matches'
                    : filter === 'live'        ? '🔴 Live Now'
                    : filter === 'upcoming'    ? 'Upcoming Fixtures'
@@ -260,21 +301,21 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
               </div>
 
               {/* Date stepper */}
-              <div className="flex items-center gap-1 bg-navy-800/60 border border-white/[0.08] rounded-lg p-0.5">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-navy-800/60 border border-slate-200 dark:border-white/[0.08] rounded-lg p-0.5 shadow-2xs">
                 <button
                   onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))}
-                  className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.07] transition-colors cursor-pointer"
+                  className="p-1 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/[0.07] transition-colors cursor-pointer"
                   title="Previous day"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 <div className="flex items-center gap-1.5 px-2">
-                  <CalendarIcon className="w-3 h-3 text-blue-400" />
-                  <span className="text-[11px] font-semibold tabular-nums text-slate-300">{dateDisplay}</span>
+                  <CalendarIcon className="w-3 h-3 text-blue-500" />
+                  <span className="text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-300">{dateDisplay}</span>
                 </div>
                 <button
                   onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))}
-                  className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/[0.07] transition-colors cursor-pointer"
+                  className="p-1 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/[0.07] transition-colors cursor-pointer"
                   title="Next day"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -306,14 +347,14 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-sm font-bold text-white">Live Matches</span>
-                    <span className="text-[10px] text-red-400 font-semibold px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">Live Matches</span>
+                    <span className="text-[10px] text-red-600 dark:text-red-400 font-semibold px-1.5 py-0.5 rounded bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
                       {liveMatches.length}
                     </span>
                   </div>
                   <button
                     onClick={() => setFilter('live')}
-                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-0.5 transition-colors cursor-pointer"
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 flex items-center gap-0.5 transition-colors cursor-pointer"
                   >
                     View All <ChevronRight className="w-3 h-3" />
                   </button>
@@ -418,13 +459,15 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
         </div>
       </div>
 
-      {/* Match Detail Modal */}
+      {/* Match Detail Modal — Lazy loaded on demand */}
       {currentActiveMatch && (
-        <MatchDetailModal
-          match={currentActiveMatch}
-          onClose={() => setSelectedMatch(null)}
-          onRefreshScores={refresh}
-        />
+        <Suspense fallback={null}>
+          <MatchDetailModal
+            match={currentActiveMatch}
+            onClose={() => setSelectedMatch(null)}
+            onRefreshScores={refresh}
+          />
+        </Suspense>
       )}
     </div>
   );

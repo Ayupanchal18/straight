@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, MapPin, ExternalLink, RefreshCw, 
   Activity, Clock, ShieldCheck, TrendingUp,
   Zap, Target, MessageSquare, Award, BarChart3, ListFilter,
-  Users, AlertCircle, ChevronRight
+  Users, AlertCircle, ChevronRight, Tv, Radio, PlayCircle, Globe, Wifi, CheckCircle2
 } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
@@ -13,23 +13,27 @@ import { TeamBadge, getTeamTheme, isMatchLive, isMatchComplete, isMatchUpcoming,
 
 export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
   const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'scorecard' | 'commentary'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'scorecard' | 'commentary' | 'broadcast'
   const [activeInningsTab, setActiveInningsTab] = useState(null);
   const [fowInningsTab, setFowInningsTab] = useState(null);
+  const [selectedBroadcastRegion, setSelectedBroadcastRegion] = useState('All');
 
   const matchId = match.id || match.rawText;
+  const [justRefreshed, setJustRefreshed] = useState(false);
+  const [flashT1, setFlashT1] = useState(null);
+  const [flashT2, setFlashT2] = useState(null);
+  const prevT1 = useRef(null);
+  const prevT2 = useRef(null);
 
-  const fetchDetails = async (isSilent = false) => {
+  const fetchDetails = async (isSilent = true, forceFresh = false) => {
     if (!match.cricbuzzLink) {
-      if (!isSilent) setLoading(false);
       return;
     }
-    if (!isSilent && !details) setLoading(true);
     setError(null);
     try {
-      const res = await cricketApi.getMatchDetails(match.cricbuzzLink);
+      const res = await cricketApi.getMatchDetails(match.cricbuzzLink, forceFresh);
       if (res && res.data) {
         setDetails(res.data);
       }
@@ -39,12 +43,12 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
         setError(err.message || 'Details currently loading...');
       }
     } finally {
-      if (!isSilent) setLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDetails(false);
+    fetchDetails(true);
 
     // Auto-refresh match details and parent live scores every 15s if the match is live
     const isLive = isMatchLive(match) || match.isLive;
@@ -62,7 +66,9 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
   const handleManualRefresh = async () => {
     if (onRefreshScores) onRefreshScores();
-    await fetchDetails(false);
+    await fetchDetails(false, true); // true = force hard refresh bypassing cache!
+    setJustRefreshed(true);
+    setTimeout(() => setJustRefreshed(false), 2200);
   };
 
   useEffect(() => {
@@ -201,6 +207,31 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
     t2Score = '';
   }
 
+  // Score change flash animations (identical behavior to homepage MatchCard)
+  useEffect(() => {
+    if (prevT1.current && prevT1.current !== '–' && prevT1.current !== t1Score && t1Score !== '–') {
+      const prevWickets = prevT1.current.includes('/') ? parseInt(prevT1.current.split('/')[1], 10) : 0;
+      const currWickets = t1Score.includes('/') ? parseInt(t1Score.split('/')[1], 10) : 0;
+      setFlashT1(currWickets > prevWickets ? 'wicket' : 'runs');
+      const timer = setTimeout(() => setFlashT1(null), 2500);
+      prevT1.current = t1Score;
+      return () => clearTimeout(timer);
+    }
+    prevT1.current = t1Score;
+  }, [t1Score]);
+
+  useEffect(() => {
+    if (prevT2.current && prevT2.current !== '–' && prevT2.current !== t2Score && t2Score !== '–') {
+      const prevWickets = prevT2.current.includes('/') ? parseInt(prevT2.current.split('/')[1], 10) : 0;
+      const currWickets = t2Score.includes('/') ? parseInt(t2Score.split('/')[1], 10) : 0;
+      setFlashT2(currWickets > prevWickets ? 'wicket' : 'runs');
+      const timer = setTimeout(() => setFlashT2(null), 2500);
+      prevT2.current = t2Score;
+      return () => clearTimeout(timer);
+    }
+    prevT2.current = t2Score;
+  }, [t2Score]);
+
   // Lifecycle state evaluation
   const isUpcoming = isMatchUpcoming(details || match) || (!details?.currentInnings && !match.isLive && (details?.status || match.status || '').toLowerCase().includes('starts at'));
   const isComplete = isMatchComplete(details || match);
@@ -318,6 +349,46 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
     });
     return squads;
   }, [details?.recentCommentary]);
+
+  // Broadcasting & Telecast Intelligence memo
+  const broadcastData = useMemo(() => {
+    if (details?.broadcast?.available) return details.broadcast;
+    if (match.broadcastSummary) {
+      return {
+        available: true,
+        summary: match.broadcastSummary,
+        platforms: match.broadcastPlatforms || [],
+        regions: [],
+        totalCount: match.broadcastPlatforms?.length || 0,
+        ottCount: (match.broadcastPlatforms || []).filter(p => p.type === 'OTT' || p.type === 'TV & OTT').length,
+        tvCount: (match.broadcastPlatforms || []).filter(p => p.type === 'TV' || p.type === 'TV & OTT').length,
+      };
+    }
+    return details?.broadcast || null;
+  }, [details?.broadcast, match.broadcastSummary, match.broadcastPlatforms]);
+
+  const broadcastRegions = useMemo(() => {
+    if (!broadcastData?.platforms || broadcastData.platforms.length === 0) return ['All'];
+    const regs = new Set(['All']);
+    broadcastData.platforms.forEach(p => {
+      if (p.region) regs.add(p.region);
+    });
+    return Array.from(regs);
+  }, [broadcastData]);
+
+  const filteredBroadcastPlatforms = useMemo(() => {
+    if (!broadcastData?.platforms) return [];
+    if (selectedBroadcastRegion === 'All') return broadcastData.platforms;
+    return broadcastData.platforms.filter(p => p.region === selectedBroadcastRegion);
+  }, [broadcastData, selectedBroadcastRegion]);
+
+  const ottPlatforms = useMemo(() => {
+    return filteredBroadcastPlatforms.filter(p => p.type === 'OTT' || p.type === 'TV & OTT');
+  }, [filteredBroadcastPlatforms]);
+
+  const tvPlatforms = useMemo(() => {
+    return filteredBroadcastPlatforms.filter(p => p.type === 'TV' || p.type === 'TV & OTT');
+  }, [filteredBroadcastPlatforms]);
 
   // Batsmen at the crease — prioritized by freshness between match polling & details
   const isMatchBatsmenNewer = (match.currentBatsmen?.length > 0) && (
@@ -535,23 +606,23 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
 
       <div
-        className="w-full max-w-4xl h-[96vh] sm:h-auto sm:max-h-[92vh] flex flex-col bg-navy-900 border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden"
+        className="w-full max-w-4xl h-[96vh] sm:h-auto sm:max-h-[92vh] flex flex-col bg-white dark:bg-navy-900 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-2xl overflow-hidden transition-colors"
         onClick={e => e.stopPropagation()}
       >
         {/* ══════════════════════════════════════
             HEADER: Breadcrumb + Status + Actions
             ══════════════════════════════════════ */}
-        <div className="flex-shrink-0 bg-navy-950/80 backdrop-blur-xl border-b border-white/[0.07] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+        <div className="flex-shrink-0 bg-slate-50 dark:bg-navy-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.07] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
           {/* Left: breadcrumb + series */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-              <span className="hover:text-slate-300 cursor-pointer transition-colors">Live</span>
+              <span className="hover:text-slate-800 dark:hover:text-slate-300 cursor-pointer transition-colors">Live</span>
               <ChevronRight className="w-3 h-3 flex-shrink-0" />
-              <span className="text-slate-400 truncate max-w-[200px]">
+              <span className="text-slate-600 dark:text-slate-400 truncate max-w-[200px]">
                 {details?.series || match.series || 'International Cricket'}
               </span>
               <ChevronRight className="w-3 h-3 flex-shrink-0" />
-              <span className="text-slate-300 font-semibold truncate max-w-[140px] hidden sm:block">
+              <span className="text-slate-800 dark:text-slate-300 font-semibold truncate max-w-[140px] hidden sm:block">
                 {t1Short} vs {t2Short}
               </span>
             </div>
@@ -570,24 +641,29 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Venue (desktop) */}
             {venueDisplay && (
-              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-[11px] text-slate-400">
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.07] text-[11px] text-slate-600 dark:text-slate-400">
                 <MapPin className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate max-w-[140px]">{venueDisplay}</span>
               </div>
             )}
-            {/* Refresh */}
+            {/* Refresh (Hard Refresh with Synced confirmation) */}
             <button
               onClick={handleManualRefresh}
-              title="Refresh match data"
-              className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white transition-colors cursor-pointer"
+              title="Force hard refresh: fetches freshest score directly from pitch"
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                justRefreshed 
+                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold' 
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.07] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span className="text-[11px]">{justRefreshed ? 'Synced' : 'Refresh'}</span>
             </button>
             {/* Close */}
             <button
               onClick={onClose}
               aria-label="Close"
-              className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.07] text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.07] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -601,7 +677,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
         <div className="flex-1 overflow-y-auto custom-scrollbar">
 
           {/* ── SCOREBOARD HERO ── */}
-          <div className="bg-gradient-to-b from-navy-800 to-navy-900 border-b border-white/[0.06] px-4 sm:px-6 py-5 sm:py-6">
+          <div className="bg-gradient-to-b from-slate-50 to-slate-100/90 dark:from-navy-800 dark:to-navy-900 border-b border-slate-200 dark:border-white/[0.06] px-4 sm:px-6 py-5 sm:py-6">
 
             {/* Tournament + Format info */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -622,25 +698,34 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                   <TeamBadge name={t1Name} shortName={t1Short} size="xl" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-sm sm:text-base text-white truncate">{t1Name}</span>
+                      <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">{t1Name}</span>
                       {isTeam1Batting && hasInningsStarted && (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" title="Batting" />
                       )}
                     </div>
-                    <span className="text-[10px] text-slate-500">{t1Short}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{t1Short}</span>
                   </div>
                 </div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="score-display text-2xl sm:text-3xl md:text-4xl font-black">{t1Score}</span>
+                  {flashT1 === 'wicket' && (
+                    <span className="px-1.5 py-0.5 rounded bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider animate-bounce shadow-2xs">
+                      Wicket!
+                    </span>
+                  )}
+                  <span className={`score-display text-2xl sm:text-3xl md:text-4xl font-black transition-all ${
+                    flashT1 === 'wicket' ? 'flash-wicket' : flashT1 === 'runs' ? 'flash-runs' : ''
+                  }`}>
+                    {t1Score}
+                  </span>
                   {t1Overs && (
-                    <span className="overs-display">({t1Overs.replace(/[()]/g, '')} ov)</span>
+                    <span className="overs-display">({t1Overs.replace(/[()]/g, '').replace(/ov/gi, '').trim()} ov)</span>
                   )}
                 </div>
                 {match.team1PrevScore && (
-                  <div className="text-[10px] text-slate-500 tabular-nums mt-0.5">& {match.team1PrevScore}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums mt-0.5">& {match.team1PrevScore}</div>
                 )}
                 {isTeam1Batting && crr && (
-                  <span className="text-[11px] font-mono font-semibold text-emerald-400 mt-1 block">
+                  <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 mt-1 block">
                     CRR: {typeof crr === 'number' ? crr.toFixed(2) : crr}
                   </span>
                 )}
@@ -648,7 +733,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
               {/* VS Center */}
               <div className="col-span-1 flex justify-center">
-                <div className="w-8 h-8 rounded-full bg-navy-700 border border-white/[0.08] flex items-center justify-center text-[10px] font-black text-slate-500">
+                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-navy-700 border border-slate-300 dark:border-white/[0.08] flex items-center justify-center text-[10px] font-black text-slate-600 dark:text-slate-400">
                   VS
                 </div>
               </div>
@@ -661,23 +746,32 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       {!isTeam1Batting && hasInningsStarted && (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" title="Batting" />
                       )}
-                      <span className="font-bold text-sm sm:text-base text-white truncate">{t2Name}</span>
+                      <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">{t2Name}</span>
                     </div>
-                    <span className="text-[10px] text-slate-500">{t2Short}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">{t2Short}</span>
                   </div>
                   <TeamBadge name={t2Name} shortName={t2Short} size="xl" />
                 </div>
                 <div className="flex items-baseline justify-end gap-1.5">
-                  <span className="score-display text-2xl sm:text-3xl md:text-4xl font-black">{t2Score}</span>
+                  {flashT2 === 'wicket' && (
+                    <span className="px-1.5 py-0.5 rounded bg-rose-500 text-white text-[10px] font-black uppercase tracking-wider animate-bounce shadow-2xs">
+                      Wicket!
+                    </span>
+                  )}
+                  <span className={`score-display text-2xl sm:text-3xl md:text-4xl font-black transition-all ${
+                    flashT2 === 'wicket' ? 'flash-wicket' : flashT2 === 'runs' ? 'flash-runs' : ''
+                  }`}>
+                    {t2Score}
+                  </span>
                   {t2Overs && (
-                    <span className="overs-display">({t2Overs.replace(/[()]/g, '')} ov)</span>
+                    <span className="overs-display">({t2Overs.replace(/[()]/g, '').replace(/ov/gi, '').trim()} ov)</span>
                   )}
                 </div>
                 {match.team2PrevScore && (
-                  <div className="text-[10px] text-slate-500 tabular-nums mt-0.5">& {match.team2PrevScore}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums mt-0.5">& {match.team2PrevScore}</div>
                 )}
                 {!isTeam1Batting && hasInningsStarted && crr && (
-                  <span className="text-[11px] font-mono font-semibold text-emerald-400 mt-1 block">
+                  <span className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 mt-1 block">
                     CRR: {typeof crr === 'number' ? crr.toFixed(2) : crr}
                   </span>
                 )}
@@ -686,10 +780,10 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
             {/* ── Status Strip ── */}
             {matchStatusText && (
-              <div className="mt-4 pt-3 border-t border-white/[0.05] flex items-center justify-between gap-3">
-                <p className="text-xs sm:text-sm font-medium text-amber-300/90 flex-1">{matchStatusText}</p>
+              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/[0.05] flex items-center justify-between gap-3">
+                <p className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-300/90 flex-1">{matchStatusText}</p>
                 {rrr && (
-                  <span className="text-xs font-mono font-bold text-red-400 flex-shrink-0 bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg">
+                  <span className="text-xs font-mono font-bold text-red-600 dark:text-red-400 flex-shrink-0 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-2 py-1 rounded-lg">
                     RRR: {rrr}
                   </span>
                 )}
@@ -698,7 +792,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
             {/* ── Over Bead Strip ── */}
             {recentBalls.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-white/[0.05]">
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/[0.05]">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {recentBalls.map((b, i) => (
                     <BallBeadInner key={i} ball={b} />
@@ -731,11 +825,12 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
           </div>
 
           {/* ── TAB BAR ── */}
-          <div className="flex items-center gap-0 border-b border-white/[0.07] bg-navy-900/80 px-3 overflow-x-auto custom-scrollbar">
+          <div className="flex items-center gap-0 border-b border-slate-200 dark:border-white/[0.07] bg-slate-50 dark:bg-navy-900/80 px-3 overflow-x-auto custom-scrollbar">
             {[
               { id: 'overview',   label: 'Live',       icon: Activity },
               { id: 'scorecard',  label: 'Scorecard',  icon: ListFilter, badge: scorecards.length > 0 ? scorecards.length : null },
               { id: 'commentary', label: 'Commentary', icon: MessageSquare, badge: commentaryCount },
+              { id: 'broadcast',  label: 'Where to Watch', icon: Tv, badge: broadcastData?.totalCount || (broadcastData?.platforms?.length ? broadcastData.platforms.length : null) },
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -745,14 +840,14 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-all cursor-pointer -mb-px ${
                     isActive
-                      ? 'border-blue-500 text-blue-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/20'
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-bold'
+                      : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-white/20'
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                   <span>{tab.label}</span>
                   {tab.badge && (
-                    <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[9px] font-bold text-slate-400">{tab.badge}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/[0.07] text-[9px] font-bold text-slate-600 dark:text-slate-400">{tab.badge}</span>
                   )}
                 </button>
               );
@@ -800,55 +895,105 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                   {/* Key Match Information Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5">
+                    <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 shadow-sm">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Venue</span>
+                        <MapPin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Venue</span>
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-white truncate" title={venueDisplay}>
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate" title={venueDisplay}>
                         {venueDisplay}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5">
+                    <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 shadow-sm">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <Target className="w-3.5 h-3.5 text-purple-400" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Format</span>
+                        <Target className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Format</span>
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-white truncate">
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                         {details?.matchFormat || match.matchFormat || match.matchType || 'T20'} {maxOvers ? `(${maxOvers} Overs)` : ''}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5">
+                    <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 shadow-sm">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Toss</span>
+                        <Zap className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Toss</span>
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-white truncate">
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                         {details?.toss?.winner 
                           ? `${details.toss.winner} (${details.toss.decision || 'elected'})` 
                           : 'Toss yet to take place'}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5">
+                    <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 shadow-sm">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <Award className="w-3.5 h-3.5 text-sky-400" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Series</span>
+                        <Award className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Series</span>
                       </div>
-                      <p className="text-xs sm:text-sm font-bold text-white truncate" title={details?.series || match.series}>
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate" title={details?.series || match.series}>
                         {details?.series || match.series || 'International Series'}
                       </p>
                     </div>
                   </div>
 
+                  {/* ── Upcoming Match Broadcasting Hub ── */}
+                  {broadcastData?.summary && (
+                    <div className="rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-purple-500/10 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-purple-950/30 border border-blue-200 dark:border-blue-500/20 p-3.5 sm:p-4 shadow-sm">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-start sm:items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
+                            <Tv className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                                Live Telecast & Streaming Guide
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300">
+                                OTT & TV
+                              </span>
+                            </div>
+                            <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                              {broadcastData.summary}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => setActiveTab('broadcast')}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-sm cursor-pointer self-start sm:self-auto flex-shrink-0"
+                        >
+                          <span>Full Broadcast Guide</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {broadcastData.platforms?.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-blue-200/60 dark:border-blue-500/15 flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Available On:</span>
+                          {broadcastData.platforms.slice(0, 5).map((p, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white dark:bg-navy-800 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 shadow-2xs"
+                            >
+                              {p.type === 'OTT' ? <Radio className="w-2.5 h-2.5 text-emerald-500" /> : <Tv className="w-2.5 h-2.5 text-blue-500" />}
+                              <span>{p.name}</span>
+                              <span className="text-[9px] text-slate-400 dark:text-slate-500">({p.region})</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Announced Squads (from Commentary / Match Details) */}
                   {squadsFromCommentary.length > 0 && (
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3.5 sm:p-4 space-y-3">
+                    <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3.5 sm:p-4 space-y-3 shadow-sm">
                       <div className="flex items-center gap-2">
-                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                        <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">
+                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
                           Announced Squads
                         </span>
                       </div>
@@ -886,12 +1031,12 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                   )}
 
                   {/* Pre-Match Awaiting Notice */}
-                  <div className="rounded-xl bg-[#0d1424] border border-white/5 p-4 sm:p-5 text-center flex flex-col items-center justify-center">
-                    <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5 text-emerald-400">
+                  <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-4 sm:p-5 text-center flex flex-col items-center justify-center shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2.5 text-emerald-500 dark:text-emerald-400">
                       <Activity className="w-4 h-4" />
                     </div>
-                    <h5 className="text-xs sm:text-sm font-extrabold text-white">Live Tracking Awaiting Match Start</h5>
-                    <p className="text-[11px] sm:text-xs text-slate-400 max-w-md mt-1 leading-relaxed">
+                    <h5 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">Live Tracking Awaiting Match Start</h5>
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 max-w-md mt-1 leading-relaxed">
                       Live ball-by-ball commentary, player crease tracking, fall of wickets, and real-time match analytics will activate automatically when play starts.
                     </p>
                   </div>
@@ -900,16 +1045,16 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                 /* ── 2. COMPLETED MATCH SUMMARY ── */
                 <div className="space-y-3.5 sm:space-y-4">
                   {/* Match Result Banner */}
-                  <div className="rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-900 to-emerald-500/5 border border-emerald-500/20 p-4 sm:p-5">
+                  <div className="rounded-2xl bg-gradient-to-r from-emerald-500/10 via-slate-100 dark:via-slate-900 to-emerald-500/5 border border-emerald-500/20 p-4 sm:p-5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                         <Award className="w-5 h-5" />
                       </div>
                       <div>
-                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-400 block">
+                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
                           Match Result
                         </span>
-                        <h4 className="text-sm sm:text-base font-extrabold text-white">
+                        <h4 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
                           {matchStatusText || 'Match Completed'}
                         </h4>
                       </div>
@@ -918,76 +1063,101 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                   {/* Innings Final Scores Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                    <div className="p-3.5 rounded-xl bg-[#0d1424] border border-white/5 flex items-center justify-between">
+                    <div className="p-3.5 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 flex items-center justify-between shadow-sm">
                       <div>
-                        <span className="text-xs font-bold text-white block">{t1Name}</span>
-                        <span className="text-[11px] text-slate-400 font-semibold">{t1Overs || '–'}</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block">{t1Name}</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">{t1Overs || '–'}</span>
                       </div>
-                      <span className="text-lg font-black text-white tabular-nums">{t1Score}</span>
+                      <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{t1Score}</span>
                     </div>
 
-                    <div className="p-3.5 rounded-xl bg-[#0d1424] border border-white/5 flex items-center justify-between">
+                    <div className="p-3.5 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 flex items-center justify-between shadow-sm">
                       <div>
-                        <span className="text-xs font-bold text-white block">{t2Name}</span>
-                        <span className="text-[11px] text-slate-400 font-semibold">{t2Overs || '–'}</span>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block">{t2Name}</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">{t2Overs || '–'}</span>
                       </div>
-                      <span className="text-lg font-black text-white tabular-nums">{t2Score}</span>
+                      <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{t2Score}</span>
                     </div>
                   </div>
                 </div>
               ) : (
                 /* ── 3. LIVE IN-PLAY MATCH EXPERIENCE ── */
                 <>
+                  {/* Live Broadcasting Quick Strip */}
+                  {broadcastData?.summary && (
+                    <div className="rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-purple-500/10 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-purple-950/30 border border-blue-200 dark:border-blue-500/20 p-3 flex items-center justify-between gap-3 shadow-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                        <Tv className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <div className="min-w-0 truncate">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 mr-2">
+                            Where to Watch:
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                            {broadcastData.summary}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('broadcast')}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                      >
+                        <span>All Channels</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
                   {/* Live Chase HUD (2nd Innings) or Match Projection HUD (1st Innings) */}
                   {isChase ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-2.5">
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">TARGET</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-amber-400 tabular-nums">{target}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">TARGET</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-amber-600 dark:text-amber-400 tabular-nums">{target}</span>
                       </div>
 
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">REQUIRED RUNS</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">{requiredRuns ?? '–'}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">REQUIRED RUNS</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tabular-nums">{requiredRuns ?? '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">BALLS LEFT</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">{ballsRemaining ?? '–'}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">BALLS LEFT</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tabular-nums">{ballsRemaining ?? '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">CRR</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-emerald-400 tabular-nums">{crr || '–'}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">CRR</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{crr || '–'}</span>
                       </div>
 
-                      <div className="col-span-2 sm:col-span-2 md:col-span-1 rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">RRR</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-rose-400 tabular-nums">{rrr || '–'}</span>
+                      <div className="col-span-2 sm:col-span-2 md:col-span-1 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">RRR</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-rose-600 dark:text-rose-400 tabular-nums">{rrr || '–'}</span>
                       </div>
                     </div>
                   ) : hasInningsStarted ? (
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">CURRENT RR (CRR)</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-emerald-400 tabular-nums">{crr || '–'}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">CURRENT RR (CRR)</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{crr || '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">OVERS LEFT</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-white tabular-nums">
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">OVERS LEFT</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tabular-nums">
                           {oversRemaining ? `${oversRemaining} ov` : (ballsRemaining !== null ? `${ballsRemaining} b` : '–')}
                         </span>
                       </div>
 
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">PROJECTED (AT CRR)</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-amber-400 tabular-nums">{projectedAtCRR || '–'}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">PROJECTED (AT CRR)</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-amber-600 dark:text-amber-400 tabular-nums">{projectedAtCRR || '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-[#0d1424] border border-white/5 p-2.5 sm:p-3 text-center">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider">PROJECTED (6.0 RPO)</span>
-                        <span className="text-base sm:text-lg md:text-xl font-black text-sky-300 tabular-nums">{projectedAt6 || '–'}</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">PROJECTED (6.0 RPO)</span>
+                        <span className="text-base sm:text-lg md:text-xl font-black text-sky-600 dark:text-sky-300 tabular-nums">{projectedAt6 || '–'}</span>
                       </div>
                     </div>
                   ) : null}
@@ -998,8 +1168,8 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       
                       {/* Recent Overs */}
                       {recentBalls.length > 0 && (
-                        <div className={`${partnership && lastWicketDisplay ? 'sm:col-span-2 md:col-span-6' : 'sm:col-span-2 md:col-span-12'} rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5 flex items-center justify-between gap-2.5 sm:gap-3`}>
-                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider flex-shrink-0">Recent Overs</span>
+                        <div className={`${partnership && lastWicketDisplay ? 'sm:col-span-2 md:col-span-6' : 'sm:col-span-2 md:col-span-12'} rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 flex items-center justify-between gap-2.5 sm:gap-3 shadow-sm`}>
+                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex-shrink-0">Recent Overs</span>
                           <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar py-0.5">
                             {recentBalls.map((b, idx) => {
                               const isBoundary = b === '4' || b === '6';
@@ -1011,10 +1181,10 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                                     isWicket
                                       ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
                                       : isBoundary
-                                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm shadow-emerald-500/30'
+                                      ? 'bg-emerald-500 text-white dark:text-slate-950 font-black shadow-sm shadow-emerald-500/30'
                                       : b === '0' || b === '•'
-                                      ? 'bg-slate-800 text-slate-400'
-                                      : 'bg-slate-800 text-slate-200 border border-white/5'
+                                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                      : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-200 border border-slate-300 dark:border-white/5'
                                   }`}
                                 >
                                   {b}
@@ -1027,14 +1197,14 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                       {/* Current Partnership */}
                       {partnership !== null && (
-                        <div className="sm:col-span-1 md:col-span-3 rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5 flex items-center gap-2.5 sm:gap-3">
-                          <div className="p-1.5 sm:p-2 rounded-lg bg-white/[0.04] text-slate-400 flex-shrink-0">
+                        <div className="sm:col-span-1 md:col-span-3 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 flex items-center gap-2.5 sm:gap-3 shadow-sm">
+                          <div className="p-1.5 sm:p-2 rounded-lg bg-slate-200 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 flex-shrink-0">
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="min-w-0">
-                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block tracking-wider">Partnership</span>
-                            <span className="text-xs sm:text-sm font-black text-white tabular-nums">
-                              {partnership.runs} <span className="text-[10px] sm:text-xs text-slate-400 font-semibold">({partnership.balls} b)</span>
+                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block tracking-wider">Partnership</span>
+                            <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tabular-nums">
+                              {partnership.runs} <span className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-semibold">({partnership.balls} b)</span>
                             </span>
                           </div>
                         </div>
@@ -1042,13 +1212,13 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                       {/* Last Wicket */}
                       {lastWicketDisplay && (
-                        <div className="sm:col-span-1 md:col-span-3 rounded-xl bg-[#0d1424] border border-white/5 p-3 sm:p-3.5 flex items-center gap-2.5 sm:gap-3">
-                          <div className="p-1.5 sm:p-2 rounded-lg bg-white/[0.04] text-rose-400 flex-shrink-0">
+                        <div className="sm:col-span-1 md:col-span-3 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 flex items-center gap-2.5 sm:gap-3 shadow-sm">
+                          <div className="p-1.5 sm:p-2 rounded-lg bg-rose-50 dark:bg-white/[0.04] text-rose-500 dark:text-rose-400 flex-shrink-0">
                             <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="min-w-0">
-                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block tracking-wider">Last Wicket</span>
-                            <span className="text-[11px] sm:text-xs font-bold text-slate-200 truncate block">
+                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block tracking-wider">Last Wicket</span>
+                            <span className="text-[11px] sm:text-xs font-bold text-slate-900 dark:text-slate-200 truncate block">
                               {lastWicketDisplay}
                             </span>
                           </div>
@@ -1060,13 +1230,13 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                   {/* ── At the Crease Live Batting Table (only if batsmen are at crease) ── */}
                   {batsmenAtCrease && batsmenAtCrease.length > 0 && (
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 overflow-hidden">
-                      <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-white/5 flex items-center justify-between gap-2 flex-wrap bg-white/[0.02]">
+                    <div className="rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm">
+                      <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-2 flex-wrap bg-slate-50/80 dark:bg-white/[0.02]">
                         <div className="flex items-center gap-2">
-                          <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                          <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">At the Crease</span>
+                          <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">At the Crease</span>
                         </div>
-                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 truncate max-w-[220px] sm:max-w-none">
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 truncate max-w-[220px] sm:max-w-none">
                           {currentBattingTeamName} — {currentBattingScoreDisplay} {isChase && target ? `| Target ${target}` : ''}
                         </span>
                       </div>
@@ -1074,7 +1244,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full min-w-[380px] sm:min-w-[480px] text-left border-collapse text-xs">
                           <thead>
-                            <tr className="border-b border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                            <tr className="border-b border-slate-200 dark:border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-50/50 dark:bg-transparent">
                               <th className="py-2 sm:py-2.5 px-3 sm:px-4">BATTER</th>
                               <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">R</th>
                               <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">B</th>
@@ -1084,28 +1254,28 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                               <th className="py-2 sm:py-2.5 px-3 sm:px-4 text-right">STATUS</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-white/[0.03]">
+                          <tbody className="divide-y divide-slate-100 dark:divide-white/[0.03]">
                             {batsmenAtCrease.map((b, i) => (
-                              <tr key={i} className={b.isStriker ? 'bg-emerald-500/[0.04]' : ''}>
-                                <td className="py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-white">
+                              <tr key={i} className={b.isStriker ? 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.04]' : ''}>
+                                <td className="py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-slate-900 dark:text-white">
                                   <div className="flex items-center gap-1.5 truncate max-w-[120px] sm:max-w-[180px]">
                                     <span className="truncate">{b.name}</span>
-                                    {b.isStriker && <Zap className="w-3 h-3 text-amber-400 fill-amber-400 flex-shrink-0" />}
+                                    {b.isStriker && <Zap className="w-3 h-3 text-amber-500 fill-amber-500 flex-shrink-0" />}
                                   </div>
                                 </td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center font-black text-emerald-400 tabular-nums text-xs sm:text-sm">{b.runs}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-300 tabular-nums">{b.balls}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-400 tabular-nums">{b.fours}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-400 tabular-nums">{b.sixes}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center font-bold text-amber-300 tabular-nums">{b.strikeRate}</td>
+                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center font-black text-emerald-600 dark:text-emerald-400 tabular-nums text-xs sm:text-sm">{b.runs}</td>
+                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-700 dark:text-slate-300 tabular-nums">{b.balls}</td>
+                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.fours}</td>
+                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.sixes}</td>
+                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center font-bold text-amber-600 dark:text-amber-300 tabular-nums">{b.strikeRate}</td>
                                 <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
                                   {b.isStriker ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase tracking-wide">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 uppercase tracking-wide">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                       STRIKER
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-800 text-slate-400 border border-slate-700 uppercase tracking-wide">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase tracking-wide">
                                       NON-STRIKER
                                     </span>
                                   )}
@@ -1122,17 +1292,17 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
               {/* ── Fall of Wickets Timeline Section with Team Toggle (only when play has commenced) ── */}
               {!isUpcoming && availableScorecards.length > 0 && (
-                <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3.5 sm:p-4">
+                <div className="rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3.5 sm:p-4 shadow-sm">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center flex-shrink-0">
-                        <Target className="w-3.5 h-3.5 text-rose-400" />
+                      <div className="w-6 h-6 rounded-lg bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 flex items-center justify-center flex-shrink-0">
+                        <Target className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">
+                        <span className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
                           Fall of Wickets
                         </span>
-                        <span className="text-[11px] sm:text-xs font-semibold text-slate-400">
+                        <span className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400">
                           • {selectedFowScorecard?.batTeamName || 'Innings'}
                         </span>
                       </div>
@@ -1140,7 +1310,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                     {/* Team / Innings Toggle Buttons */}
                     {availableScorecards.length > 1 && (
-                      <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950/70 border border-white/10 self-start sm:self-auto overflow-x-auto max-w-full">
+                      <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-white/10 self-start sm:self-auto overflow-x-auto max-w-full">
                         {availableScorecards.map((sc, idx) => {
                           const isActive = resolvedFowIndex === idx;
                           const isLiveInnings = idx === currentBattingInningsIndex && isMatchLive(details || match);
@@ -1153,18 +1323,18 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                               onClick={() => setFowInningsTab(idx)}
                               className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                                 isActive
-                                  ? 'bg-emerald-500 text-slate-950 shadow-sm shadow-emerald-500/25 font-black'
-                                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                  ? 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-slate-950 shadow-sm font-black'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
                               }`}
                             >
                               <span>{sc.shortName || sc.batTeamShortName || sc.batTeamName || `Inn ${idx + 1}`}</span>
                               <span className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
-                                isActive ? 'bg-slate-950/20 text-slate-950' : 'bg-white/5 text-slate-400'
+                                isActive ? 'bg-white/20 dark:bg-slate-950/20' : 'bg-slate-200 dark:bg-white/5 text-slate-700 dark:text-slate-400'
                               }`}>
                                 {scRuns}/{scWkts}
                               </span>
                               {isLiveInnings && (
-                                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-slate-950 animate-pulse' : 'bg-emerald-400 animate-pulse'}`} />
+                                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white dark:bg-slate-950 animate-pulse' : 'bg-emerald-500 animate-pulse'}`} />
                               )}
                             </button>
                           );
@@ -1179,24 +1349,24 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       {fallOfWickets.map((w, idx) => (
                         <div 
                           key={idx}
-                          className="p-2.5 sm:p-3 rounded-xl bg-slate-900/80 border border-white/5 flex items-center justify-between gap-2 hover:border-white/10 transition-colors"
+                          className="p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 flex items-center justify-between gap-2 hover:border-slate-300 dark:hover:border-white/10 transition-colors"
                         >
                           <div className="min-w-0 pr-1">
-                            <span className="text-xs font-bold text-white block truncate">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
                               {w.wktNum || idx + 1}. {w.name}
                             </span>
-                            <span className="text-[10px] sm:text-[11px] font-mono text-emerald-400 block mt-0.5">
+                            <span className="text-[10px] sm:text-[11px] font-mono text-emerald-600 dark:text-emerald-400 block mt-0.5">
                               {w.score || `${w.teamRuns || w.runs}/${w.wktNum || idx + 1}`} {w.overs ? `(${w.overs} ov)` : ''}
                             </span>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <span className="text-xs font-extrabold text-slate-200 tabular-nums block">
+                            <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 tabular-nums block">
                               {w.batterRuns !== null && w.batterRuns !== undefined 
                                 ? `${w.batterRuns}` 
                                 : (w.runs !== undefined ? `${w.runs}` : '–')}
                             </span>
                             {w.batterBalls !== null && w.batterBalls !== undefined && (
-                              <span className="text-[10px] text-slate-400 font-medium block">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
                                 {w.batterBalls} balls
                               </span>
                             )}
@@ -1205,12 +1375,12 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       ))}
                     </div>
                   ) : (
-                    <div className="py-6 px-4 rounded-xl bg-slate-900/40 border border-white/5 text-center flex flex-col items-center justify-center">
-                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2 text-emerald-400">
+                    <div className="py-6 px-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2 text-emerald-500 dark:text-emerald-400">
                         <ShieldCheck className="w-4 h-4" />
                       </div>
-                      <p className="text-xs font-bold text-white">No wickets fallen yet</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5 max-w-sm">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">No wickets fallen yet</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-sm">
                         {selectedFowScorecard?.batTeamName || 'This team'} is {selectedFowScorecard?.score ?? 0}/{selectedFowScorecard?.wickets ?? 0} {selectedFowScorecard?.overs ? `(${selectedFowScorecard.overs} ov)` : ''} without loss.
                       </p>
                       {availableScorecards.length > 1 && availableScorecards.some((sc, i) => i !== resolvedFowIndex && ((sc.wickets ?? 0) > 0 || (sc.fallOfWickets?.length ?? 0) > 0)) && (
@@ -1219,7 +1389,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                             const otherIdx = availableScorecards.findIndex((sc, i) => i !== resolvedFowIndex && ((sc.wickets ?? 0) > 0 || (sc.fallOfWickets?.length ?? 0) > 0));
                             if (otherIdx !== -1) setFowInningsTab(otherIdx);
                           }}
-                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-emerald-400 text-[11px] font-bold transition-all cursor-pointer border border-white/10"
+                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold transition-all cursor-pointer border border-slate-200 dark:border-white/10"
                         >
                           <span>
                             View {availableScorecards.find((sc, i) => i !== resolvedFowIndex && ((sc.wickets ?? 0) > 0 || (sc.fallOfWickets?.length ?? 0) > 0))?.batTeamName || 'other team'}'s wickets
@@ -1239,10 +1409,10 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
           {activeTab === 'scorecard' && (
             <div className="space-y-3.5 sm:space-y-4">
               {isUpcoming || scorecards.length === 0 || scorecards.every(sc => (!sc.batsmen || sc.batsmen.length === 0) && (!sc.bowlers || sc.bowlers.length === 0)) ? (
-                <div className="text-center py-12 sm:py-16 text-slate-400 rounded-xl bg-[#0d1424] border border-white/5 p-6">
-                  <Clock className="w-8 h-8 text-amber-400 mx-auto mb-2 opacity-80" />
-                  <p className="text-xs sm:text-sm font-bold text-white">Full Scorecard Awaiting Match Start</p>
-                  <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+                <div className="text-center py-12 sm:py-16 text-slate-400 rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-6 shadow-sm">
+                  <Clock className="w-8 h-8 text-amber-500 dark:text-amber-400 mx-auto mb-2 opacity-80" />
+                  <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Full Scorecard Awaiting Match Start</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
                     The official scorecard and player performances will be updated live once the match begins.
                   </p>
                 </div>
@@ -1256,8 +1426,8 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                         onClick={() => setActiveInningsTab(i)}
                         className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                           resolvedActiveInningsIndex === i
-                            ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                            : 'bg-slate-900 text-slate-400 hover:text-white border border-white/5'
+                            ? 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-slate-950 shadow-md font-black'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/5'
                         }`}
                       >
                         {sc.batTeamName || `Innings ${i + 1}`} — {sc.score}/{sc.wickets} ({sc.overs} ov)
@@ -1266,14 +1436,14 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                   </div>
 
                   {/* Batsmen Table */}
-                  <div className="rounded-xl bg-[#0d1424] border border-white/5 overflow-hidden">
-                    <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-white/5 bg-white/[0.02] text-xs font-bold text-slate-300 uppercase">
+                  <div className="rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm">
+                    <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 dark:border-white/5 bg-slate-50/80 dark:bg-white/[0.02] text-xs font-bold text-slate-800 dark:text-slate-300 uppercase">
                       Batting — {currentScorecard?.batTeamName}
                     </div>
                     <div className="overflow-x-auto custom-scrollbar">
                       <table className="w-full min-w-[440px] text-left border-collapse text-xs">
                         <thead>
-                          <tr className="border-b border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-400 uppercase">
+                          <tr className="border-b border-slate-200 dark:border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase bg-slate-50/50 dark:bg-transparent">
                             <th className="py-2 sm:py-2.5 px-3 sm:px-4">BATSMAN</th>
                             <th className="py-2 sm:py-2.5 px-2 sm:px-3">DISMISSAL</th>
                             <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">R</th>
@@ -1283,16 +1453,16 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                             <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">SR</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/[0.03]">
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.03]">
                           {(currentScorecard?.batsmen || []).map((b, i) => (
                             <tr key={i}>
-                              <td className="py-2 sm:py-2.5 px-3 sm:px-4 font-bold text-white truncate max-w-[120px]">{b.name}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-[11px] text-slate-400">{b.outDesc}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center font-bold text-emerald-400 tabular-nums">{b.runs}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-300 tabular-nums">{b.balls}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-400 tabular-nums">{b.fours}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-400 tabular-nums">{b.sixes}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-amber-300 tabular-nums font-semibold">{b.strikeRate}</td>
+                              <td className="py-2 sm:py-2.5 px-3 sm:px-4 font-bold text-slate-900 dark:text-white truncate max-w-[120px]">{b.name}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400">{b.outDesc}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{b.runs}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-700 dark:text-slate-300 tabular-nums">{b.balls}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.fours}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.sixes}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-amber-700 dark:text-amber-300 tabular-nums font-semibold">{b.strikeRate}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1301,14 +1471,14 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                   </div>
 
                   {/* Bowlers Table */}
-                  <div className="rounded-xl bg-[#0d1424] border border-white/5 overflow-hidden">
-                    <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-white/5 bg-white/[0.02] text-xs font-bold text-slate-300 uppercase">
+                  <div className="rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 overflow-hidden shadow-sm">
+                    <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 dark:border-white/5 bg-slate-50/80 dark:bg-white/[0.02] text-xs font-bold text-slate-800 dark:text-slate-300 uppercase">
                       Bowling
                     </div>
                     <div className="overflow-x-auto custom-scrollbar">
                       <table className="w-full min-w-[380px] text-left border-collapse text-xs">
                         <thead>
-                          <tr className="border-b border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-400 uppercase">
+                          <tr className="border-b border-slate-200 dark:border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase bg-slate-50/50 dark:bg-transparent">
                             <th className="py-2 sm:py-2.5 px-3 sm:px-4">BOWLER</th>
                             <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">O</th>
                             <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">M</th>
@@ -1317,15 +1487,15 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                             <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">ECO</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/[0.03]">
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.03]">
                           {(currentScorecard?.bowlers || []).map((b, i) => (
                             <tr key={i}>
-                              <td className="py-2 sm:py-2.5 px-3 sm:px-4 font-bold text-white truncate max-w-[120px]">{b.name}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-300 tabular-nums">{b.overs}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-400 tabular-nums">{b.maidens}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-red-300 tabular-nums">{b.runs}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center font-bold text-emerald-400 tabular-nums">{b.wickets}</td>
-                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-amber-300 tabular-nums font-semibold">{b.economy}</td>
+                              <td className="py-2 sm:py-2.5 px-3 sm:px-4 font-bold text-slate-900 dark:text-white truncate max-w-[120px]">{b.name}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-700 dark:text-slate-300 tabular-nums">{b.overs}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.maidens}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-slate-800 dark:text-red-300 tabular-nums">{b.runs}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{b.wickets}</td>
+                              <td className="py-2 sm:py-2.5 px-2 sm:px-3 text-center text-amber-700 dark:text-amber-300 tabular-nums font-semibold">{b.economy}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1335,10 +1505,10 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
                   {/* Fall of Wickets for this scorecard */}
                   {currentScorecard?.fallOfWickets?.length > 0 && (
-                    <div className="rounded-xl bg-[#0d1424] border border-white/5 p-3.5 sm:p-4">
+                    <div className="rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3.5 sm:p-4 shadow-sm">
                       <div className="flex items-center gap-2 mb-2.5 sm:mb-3">
-                        <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400" />
-                        <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">
+                        <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-500 dark:text-rose-400" />
+                        <span className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
                           Fall of Wickets — {currentScorecard.batTeamName}
                         </span>
                       </div>
@@ -1346,24 +1516,24 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                         {currentScorecard.fallOfWickets.map((w, idx) => (
                           <div 
                             key={idx}
-                            className="p-2.5 sm:p-3 rounded-xl bg-slate-900/80 border border-white/5 flex items-center justify-between gap-2"
+                            className="p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-white/5 flex items-center justify-between gap-2"
                           >
                             <div className="min-w-0 pr-1">
-                              <span className="text-xs font-bold text-white block truncate">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white block truncate">
                                 {w.wktNum || idx + 1}. {w.name}
                               </span>
-                              <span className="text-[10px] sm:text-[11px] font-mono text-emerald-400 block mt-0.5">
+                              <span className="text-[10px] sm:text-[11px] font-mono text-emerald-600 dark:text-emerald-400 block mt-0.5">
                                 {w.score || `${w.teamRuns || w.runs}/${w.wktNum || idx + 1}`} {w.overs ? `(${w.overs} ov)` : ''}
                               </span>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <span className="text-xs font-extrabold text-slate-200 tabular-nums block">
+                              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 tabular-nums block">
                                 {w.batterRuns !== null && w.batterRuns !== undefined 
                                   ? `${w.batterRuns}` 
                                   : (w.runs !== undefined ? `${w.runs}` : '–')}
                               </span>
                               {w.batterBalls !== null && w.batterBalls !== undefined && (
-                                <span className="text-[10px] text-slate-400 font-medium block">
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
                                   {w.batterBalls} balls
                                 </span>
                               )}
@@ -1397,40 +1567,40 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       <div 
                         key={i} 
                         className={`flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3.5 rounded-xl border transition-all ${
-                          isWicketEvent ? 'bg-rose-500/10 border-rose-500/30' :
-                          isSixEvent ? 'bg-purple-500/10 border-purple-500/30' :
-                          isFourEvent ? 'bg-emerald-500/10 border-emerald-500/30' :
-                          'bg-[#0d1424] border-white/5'
+                          isWicketEvent ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30' :
+                          isSixEvent ? 'bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/30' :
+                          isFourEvent ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30' :
+                          'bg-slate-50 dark:bg-[#0d1424] border-slate-200 dark:border-white/5 shadow-sm'
                         }`}
                       >
                         <div className="flex flex-col items-center min-w-[36px] sm:min-w-[42px] flex-shrink-0">
                           {hasBallMetric ? (
-                            <span className="text-[11px] sm:text-xs font-mono font-black text-emerald-400">
+                            <span className="text-[11px] sm:text-xs font-mono font-black text-emerald-600 dark:text-emerald-400">
                               {`${c.overNumber}.${c.ballNumber}`}
                             </span>
                           ) : (
-                            <span className="text-[8px] sm:text-[9px] font-black uppercase text-amber-400/90 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
+                            <span className="text-[8px] sm:text-[9px] font-black uppercase text-amber-700 dark:text-amber-400/90 bg-amber-50 dark:bg-amber-500/10 px-1 py-0.5 rounded border border-amber-200 dark:border-amber-500/20">
                               INFO
                             </span>
                           )}
                           {isWicketEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-rose-500 text-white mt-1">W</span>}
                           {isSixEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-purple-500 text-white mt-1">6</span>}
-                          {isFourEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-emerald-500 text-slate-950 mt-1">4</span>}
+                          {isFourEvent && <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-extrabold bg-emerald-500 text-white dark:text-slate-950 mt-1">4</span>}
                         </div>
 
                       <div className="flex-1 min-w-0">
                         {(c.batsman || c.bowler) && (
-                          <div className="text-[10px] sm:text-[11px] text-slate-400 font-semibold mb-0.5">
+                          <div className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 font-semibold mb-0.5">
                             {c.bowler && <span>{c.bowler}</span>}
-                            {c.bowler && c.batsman && <span className="text-slate-600 mx-1">to</span>}
-                            {c.batsman && <span className="text-white font-bold">{c.batsman}</span>}
+                            {c.bowler && c.batsman && <span className="text-slate-400 dark:text-slate-600 mx-1">to</span>}
+                            {c.batsman && <span className="text-slate-900 dark:text-white font-bold">{c.batsman}</span>}
                           </div>
                         )}
                         <p className={`text-[11px] sm:text-xs leading-relaxed ${
-                          isWicketEvent ? 'text-rose-200 font-semibold' :
-                          isSixEvent ? 'text-purple-200' :
-                          isFourEvent ? 'text-emerald-200' :
-                          'text-slate-300'
+                          isWicketEvent ? 'text-rose-900 dark:text-rose-200 font-semibold' :
+                          isSixEvent ? 'text-purple-900 dark:text-purple-200' :
+                          isFourEvent ? 'text-emerald-900 dark:text-emerald-200' :
+                          'text-slate-700 dark:text-slate-300'
                         }`}>
                           {c.text}
                         </p>
@@ -1443,11 +1613,238 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
             </div>
           )}
 
+          {/* ── TAB 4: WHERE TO WATCH (BROADCASTING & STREAMING) ── */}
+          {activeTab === 'broadcast' && (
+            <div className="space-y-4">
+              {/* Broadcast Hero Banner */}
+              <div className="rounded-2xl bg-gradient-to-r from-blue-600/15 via-indigo-600/10 to-sky-600/15 dark:from-blue-950/50 dark:via-indigo-950/40 dark:to-sky-950/30 border border-blue-200 dark:border-blue-500/20 p-4 sm:p-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0 shadow-xs">
+                      <Tv className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                          Broadcasting & Telecast Hub
+                        </span>
+                        {isLive && (
+                          <span className="badge-live text-[9px] py-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            LIVE NOW
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5">
+                        {t1Short} vs {t2Short} • Official Telecast Guide
+                      </h3>
+                      <p className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                        {broadcastData?.summary || `Broadcast coverage for ${details?.series || match.series || 'this match'}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Primary Watch Action if Available */}
+                  {broadcastData?.platforms?.find(p => p.url) && (
+                    <a
+                      href={broadcastData.platforms.find(p => p.url).url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md hover:shadow-blue-500/20 cursor-pointer self-start sm:self-auto flex-shrink-0"
+                    >
+                      <PlayCircle className="w-4 h-4" />
+                      <span>Watch on {broadcastData.platforms.find(p => p.url).name}</span>
+                      <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Region Filter Chips */}
+              {broadcastRegions.length > 2 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1.5 flex-shrink-0 mr-1">
+                    <Globe className="w-3.5 h-3.5" />
+                    <span>Region:</span>
+                  </span>
+                  {broadcastRegions.map(reg => {
+                    const isSelected = selectedBroadcastRegion === reg;
+                    return (
+                      <button
+                        key={reg}
+                        onClick={() => setSelectedBroadcastRegion(reg)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-xs font-bold'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.05] dark:hover:bg-white/[0.08] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/5'
+                        }`}
+                      >
+                        {reg}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Platforms Grid: OTT & TV */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* 1. OTT & Digital Streaming Platforms */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <Radio className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        OTT & Digital Streaming
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                      {ottPlatforms.length} {ottPlatforms.length === 1 ? 'Platform' : 'Platforms'}
+                    </span>
+                  </div>
+
+                  {ottPlatforms.length === 0 ? (
+                    <div className="p-5 rounded-xl bg-slate-50 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 text-center text-xs text-slate-500">
+                      No digital streams listed for {selectedBroadcastRegion}.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {ottPlatforms.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 sm:p-3.5 rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 hover:border-emerald-500/40 dark:hover:border-emerald-500/40 transition-all shadow-xs flex items-center justify-between gap-3 group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-xs flex-shrink-0">
+                              {p.name.slice(0, 3).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                                  {p.name}
+                                </span>
+                                {p.badge && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                    {p.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <Globe className="w-2.5 h-2.5" />
+                                  <span>{p.region}</span>
+                                </span>
+                                <span>•</span>
+                                <span>Digital OTT Feed</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {p.url ? (
+                            <a
+                              href={p.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all shadow-xs flex-shrink-0 cursor-pointer"
+                            >
+                              <span>Watch</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 px-2 py-1 rounded bg-slate-100 dark:bg-white/[0.04]">
+                              App / Web
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Television & Cable Channels */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <Tv className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        Television & Cable Channels
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400">
+                      {tvPlatforms.length} {tvPlatforms.length === 1 ? 'Channel' : 'Channels'}
+                    </span>
+                  </div>
+
+                  {tvPlatforms.length === 0 ? (
+                    <div className="p-5 rounded-xl bg-slate-50 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 text-center text-xs text-slate-500">
+                      No television channels listed for {selectedBroadcastRegion}.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {tvPlatforms.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 sm:p-3.5 rounded-xl bg-white dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 hover:border-blue-500/40 dark:hover:border-blue-500/40 transition-all shadow-xs flex items-center justify-between gap-3 group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-black text-xs flex-shrink-0">
+                              <Tv className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                                  {p.name}
+                                </span>
+                                {p.badge && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                    {p.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <Globe className="w-2.5 h-2.5" />
+                                  <span>{p.region}</span>
+                                </span>
+                                <span>•</span>
+                                <span>Linear Television / Cable / DTH</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="px-2 py-1 rounded bg-slate-100 dark:bg-white/[0.04] text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                              Live TV
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Informative Telecast Note */}
+              <div className="rounded-xl bg-slate-50 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3.5 sm:p-4 flex items-start gap-3">
+                <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                <div className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Verified Broadcaster Network: </span>
+                  Telecast guides are synchronized with official tournament fixtures and live match telemetry. Streaming access requires a valid regional account or subscription on the respective OTT apps.
+                </div>
+              </div>
+            </div>
+          )}
+
           </div>{/* ── end tab content area div ── */}
         </div>{/* ── end scrollable body div ── */}
 
         {/* ── FOOTER BAR ── */}
-        <div className="flex-shrink-0 bg-navy-950/80 backdrop-blur-xl border-t border-white/[0.07] px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3">
+        <div className="flex-shrink-0 bg-slate-50 dark:bg-navy-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/[0.07] px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
@@ -1466,7 +1863,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
               href={match.cricbuzzLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 text-xs font-semibold transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/15 hover:bg-blue-100 dark:hover:bg-blue-500/25 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 text-xs font-semibold transition-all cursor-pointer"
             >
               <span>Full Scorecard</span>
               <ExternalLink className="w-3.5 h-3.5" />

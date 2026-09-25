@@ -14,6 +14,10 @@ const ScheduleList = lazy(() => import('./components/features/schedule/ScheduleL
 const PlayerSearch = lazy(() => import('./components/features/players/PlayerSearch').then(m => ({ default: m.PlayerSearch })));
 const PlayerCompare = lazy(() => import('./components/features/compare/PlayerCompare').then(m => ({ default: m.PlayerCompare })));
 const FavoritesView = lazy(() => import('./components/features/favorites/FavoritesView').then(m => ({ default: m.FavoritesView })));
+const BuyMeCoffeeView = lazy(() => import('./components/features/support/BuyMeCoffeeView').then(m => ({ default: m.BuyMeCoffeeView })));
+const NotFoundView = lazy(() => import('./components/features/notfound/NotFoundView').then(m => ({ default: m.NotFoundView })));
+
+const VALID_TABS = ['live', 'schedule', 'players', 'compare', 'favorites', 'support', 'coffee', '404'];
 
 const TabLoadingFallback = () => (
   <div className="space-y-4 animate-pulse">
@@ -72,6 +76,19 @@ export default function App() {
           title: 'My Cricket Watchlist & Saved Matches | CricketHub',
           description: 'Quick access to your bookmarked cricket matches, tracked players, and personalized alerts.',
           keywords: 'cricket watchlist, pinned matches, favorite players'
+        };
+      case 'support':
+      case 'coffee':
+        return {
+          title: 'Buy Me a Coffee ☕ | Support CricketHub Development',
+          description: 'Support independent, ad-free real-time cricket scores, live telemetry, and community analytics on CricketHub.',
+          keywords: 'buy me a coffee, donate, support crickethub, ad-free cricket scores'
+        };
+      case '404':
+        return {
+          title: "Howzat?! That's Out! (404) | CricketHub",
+          description: "The page you were looking for doesn't exist or has been caught out.",
+          keywords: '404 not found, page not found'
         };
       case 'live':
       default:
@@ -180,45 +197,59 @@ export default function App() {
 
           {/* Main Content Area */}
           <main className="flex-1 w-full pb-24 md:pb-12">
-            {activeTab === 'live' && (
-              <LiveScoresList
-                onSelectTab={setActiveTab}
-                onSearchPlayer={handleSelectPlayerFromWatchlist}
-                onOpenSearch={handleOpenSearchPalette}
-                sharedLiveScores={liveScoresHook}
-              />
-            )}
-
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-6">
-              <Suspense fallback={<TabLoadingFallback />}>
-                {activeTab === 'schedule' && <ScheduleList />}
-
-                {activeTab === 'players' && (
-                  <PlayerSearch
-                    initialQuery={selectedPlayerQuery}
-                    onCompare={handleCompareFromProfile}
-                  />
-                )}
-
-                {activeTab === 'compare' && (
-                  <PlayerCompare
-                    defaultPlayer1={comparePlayer1}
-                    defaultPlayer2={comparePlayer2}
-                  />
-                )}
-
-                {activeTab === 'favorites' && (
-                  <FavoritesView
-                    onSelectPlayer={handleSelectPlayerFromWatchlist}
+            {!VALID_TABS.includes(activeTab) || activeTab === '404' ? (
+              <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-6">
+                <Suspense fallback={<TabLoadingFallback />}>
+                  <NotFoundView onNavigate={setActiveTab} onOpenSearch={handleOpenSearchPalette} />
+                </Suspense>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'live' && (
+                  <LiveScoresList
                     onSelectTab={setActiveTab}
+                    onSearchPlayer={handleSelectPlayerFromWatchlist}
+                    onOpenSearch={handleOpenSearchPalette}
+                    sharedLiveScores={liveScoresHook}
                   />
                 )}
-              </Suspense>
-            </div>
+
+                <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-6">
+                  <Suspense fallback={<TabLoadingFallback />}>
+                    {activeTab === 'schedule' && <ScheduleList />}
+
+                    {activeTab === 'players' && (
+                      <PlayerSearch
+                        initialQuery={selectedPlayerQuery}
+                        onCompare={handleCompareFromProfile}
+                      />
+                    )}
+
+                    {activeTab === 'compare' && (
+                      <PlayerCompare
+                        defaultPlayer1={comparePlayer1}
+                        defaultPlayer2={comparePlayer2}
+                      />
+                    )}
+
+                    {activeTab === 'favorites' && (
+                      <FavoritesView
+                        onSelectPlayer={handleSelectPlayerFromWatchlist}
+                        onSelectTab={setActiveTab}
+                      />
+                    )}
+
+                    {(activeTab === 'support' || activeTab === 'coffee') && (
+                      <BuyMeCoffeeView onNavigate={setActiveTab} />
+                    )}
+                  </Suspense>
+                </div>
+              </>
+            )}
           </main>
 
           {/* Footer */}
-          <Footer />
+          <Footer onSelectTab={setActiveTab} />
         </div>
       </FavoritesProvider>
     </ThemeProvider>

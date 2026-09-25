@@ -18,6 +18,15 @@ app.use(compression({
   level: 6
 }));
 
+// Security hardening: disable framework fingerprinting and set defensive headers
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Trust reverse proxy headers (Render, Heroku, Nginx)
 app.set('trust proxy', 1);
 

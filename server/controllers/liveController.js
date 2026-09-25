@@ -31,11 +31,13 @@ const getMatchDetails = async (req, res, next) => {
       return res.status(400).json({ status: 'fail', message: 'Match URL is required.' });
     }
 
-    const details = await scraperService.scrapeMatchDetails(url);
+    const forceFresh = req.query.fresh === 'true';
+    const result = await cacheService.getMatchDetails(url, () => scraperService.scrapeMatchDetails(url), forceFresh);
 
     return res.status(200).json({
       status: 'success',
-      data: details,
+      source: result.source,
+      data: result.data,
     });
   } catch (error) {
     next(error);

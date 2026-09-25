@@ -25,10 +25,69 @@ api.interceptors.response.use(
   }
 );
 
+// Client-side in-memory cache for instant 0ms modal opening
+const detailsClientCache = new Map();
+const inFlightPrefetches = new Map();
+
 export const cricketApi = {
-  // Live Scores
-  getLiveScores: () => api.get('/live'),
-  getMatchDetails: (url) => api.get(`/live/details?url=${encodeURIComponent(url)}`),
+  // Live Scores (supports hard refresh to bypass cache)
+  getLiveScores: (forceFresh = false) => api.get(forceFresh ? '/live?fresh=true' : '/live'),
+
+  // Instant-Cached Match Details
+  getMatchDetails: async (url, forceFresh = false) => {
+    if (!url) return null;
+    const cacheKey = url;
+    const now = Date.now();
+
+    if (!forceFresh && detailsClientCache.has(cacheKey)) {
+      const entry = detailsClientCache.get(cacheKey);
+      if (now - entry.timestamp < 15000) { // 15s fresh client cache
+        return entry.data;
+      }
+    }
+
+    if (inFlightPrefetches.has(cacheKey)) {
+      return inFlightPrefetches.get(cacheKey);
+    }
+
+    const fetchUrl = `/live/details?url=${encodeURIComponent(url)}${forceFresh ? '&fresh=true' : ''}`;
+    const fetchPromise = api.get(fetchUrl)
+      .then((res) => {
+        detailsClientCache.set(cacheKey, { data: res, timestamp: Date.now() });
+        return res;
+      })
+      .finally(() => {
+        inFlightPrefetches.delete(cacheKey);
+      });
+
+    inFlightPrefetches.set(cacheKey, fetchPromise);
+    return fetchPromise;
+  },
+
+  // Predictive Hover Prefetch: primes cache during 150-200ms cursor hover before click
+  prefetchMatchDetails: (url) => {
+    if (!url) return;
+    const cacheKey = url;
+    const entry = detailsClientCache.get(cacheKey);
+    if (entry && (Date.now() - entry.timestamp < 15000)) {
+      return; // Already warm in memory
+    }
+    if (inFlightPrefetches.has(cacheKey)) {
+      return; // In-flight
+    }
+
+    const fetchPromise = api.get(`/live/details?url=${encodeURIComponent(url)}`)
+      .then((res) => {
+        detailsClientCache.set(cacheKey, { data: res, timestamp: Date.now() });
+        return res;
+      })
+      .catch(() => {}) // Silent fail for prefetch
+      .finally(() => {
+        inFlightPrefetches.delete(cacheKey);
+      });
+
+    inFlightPrefetches.set(cacheKey, fetchPromise);
+  },
 
   // Upcoming Schedule
   getSchedule: () => api.get('/schedule'),

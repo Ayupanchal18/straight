@@ -134,13 +134,21 @@ export const TeamBadge = ({ name = '', shortName = '', size = 'md', className = 
   const [imgFailed, setImgFailed] = useState(false);
   const [fallbackAttempted, setFallbackAttempted] = useState(false);
 
+  // Compute clean 2-3 char initials that never overflow border
+  const rawShort = (theme.short || shortName || name.slice(0, 3)).trim().toUpperCase();
+  const displayShort = rawShort.length > 3 ? rawShort.slice(0, 3) : rawShort;
+
+  const textSizeClass = displayShort.length >= 3 
+    ? (size === 'xs' ? 'text-[6px]' : size === 'sm' ? 'text-[8px]' : size === 'md' ? 'text-[10px]' : 'text-xs')
+    : (size === 'xs' ? 'text-[7px]' : size === 'sm' ? 'text-[9px]' : size === 'md' ? 'text-xs' : 'text-sm');
+
   const sizeClasses = {
-    xs: 'w-4 h-4 text-[7px]',
-    sm: 'w-6 h-6 text-[9px]',
-    md: 'w-8 h-8 text-xs',
-    lg: 'w-10 h-10 sm:w-11 sm:h-11 text-sm',
-    xl: 'w-11 h-11 sm:w-14 sm:h-14 text-base',
-  }[size] || 'w-8 h-8 text-xs';
+    xs: 'w-4 h-4',
+    sm: 'w-6 h-6',
+    md: 'w-8 h-8',
+    lg: 'w-10 h-10 sm:w-11 sm:h-11',
+    xl: 'w-11 h-11 sm:w-14 sm:h-14',
+  }[size] || 'w-8 h-8';
 
   const handleImageError = () => {
     if (!fallbackAttempted && theme.countryCode) {
@@ -172,8 +180,10 @@ export const TeamBadge = ({ name = '', shortName = '', size = 'md', className = 
   }
 
   return (
-    <div className={`${sizeClasses} ${className} rounded-xl bg-gradient-to-br ${theme.bg} flex items-center justify-center font-black shadow-md border ${theme.border} flex-shrink-0`}>
-      <span className={theme.text}>{theme.short}</span>
+    <div className={`${sizeClasses} ${className} rounded-full overflow-hidden bg-gradient-to-br ${theme.bg} flex items-center justify-center font-black shadow-md border ${theme.border} flex-shrink-0 p-0.5`}>
+      <span className={`${theme.text} ${textSizeClass} font-bold tracking-tight truncate max-w-full text-center leading-none select-none`}>
+        {displayShort}
+      </span>
     </div>
   );
 };

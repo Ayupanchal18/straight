@@ -198,16 +198,31 @@ export function isMatchComplete(m) {
   const state = (m.state || '').toLowerCase();
   const rawText = (m.rawText || '').toLowerCase();
 
+  // Innings Break / Strategic Timeout — definitively NOT complete
+  if (
+    state.includes('innings break') ||
+    state === 'strategic timeout' ||
+    status.includes('innings break') ||
+    status.includes('strategic timeout')
+  ) {
+    return false;
+  }
+
+  // Guard: "won the toss" must NOT trigger match-completion
+  const tossInStatus = status.includes('won the toss');
+  const tossInRawText = rawText.includes('won the toss');
+
   return Boolean(
     state === 'complete' ||
     state === 'result' ||
-    status.includes(' won') ||
     status.includes('won by') ||
+    (!tossInStatus && status.includes(' won')) ||
     status.includes('match drawn') ||
     status.includes('match tied') ||
     status.includes('abandon') ||
     status.includes('no result') ||
-    rawText.includes(' won') ||
+    rawText.includes('won by') ||
+    (!tossInRawText && rawText.includes(' won')) ||
     rawText.includes(' - complete')
   );
 }
@@ -243,11 +258,17 @@ export function isMatchLive(m) {
   if (!m) return false;
   if (isMatchComplete(m)) return false;
   if (isMatchUpcoming(m)) return false;
+  const state = (m.state || '').toLowerCase();
+  const status = (m.status || '').toLowerCase();
   return Boolean(
     m.isLive ||
-    m.state === 'in_progress' ||
-    m.state === 'live' ||
-    m.state === 'inprogress' ||
+    state === 'in_progress' ||
+    state === 'live' ||
+    state === 'inprogress' ||
+    state.includes('innings break') ||
+    state === 'strategic timeout' ||
+    status.includes('innings break') ||
+    status.includes('strategic timeout') ||
     (m.currentBatsmen && m.currentBatsmen.length > 0) ||
     Boolean(m.team1Score && m.team1Score !== '–' && !isMatchUpcoming(m) && !isMatchComplete(m))
   );

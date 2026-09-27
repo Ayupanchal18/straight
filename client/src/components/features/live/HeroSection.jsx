@@ -50,15 +50,15 @@ export const HeroSection = ({ onOpenSearch, onSelectTab, liveCount = 0, upcoming
         <div className="absolute bottom-0 left-0 w-80 h-full bg-gradient-to-tr from-cyan-500/5 via-transparent to-transparent" />
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-5 sm:py-6 relative z-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 sm:py-6 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 items-center">
 
           {/* ── Left / Main: Compact Headline & Controls ── */}
-          <div className="lg:col-span-8 space-y-3">
+          <div className="lg:col-span-8 space-y-1.5 sm:space-y-3">
             
             {/* Headline + Live Pulse Chip */}
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl sm:text-3xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white font-display">
+              <h1 className="text-xl sm:text-3xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-white font-display">
                 Live Cricket. <span className="text-blue-600 dark:text-blue-400">Deeper Insights.</span>
               </h1>
               
@@ -75,18 +75,18 @@ export const HeroSection = ({ onOpenSearch, onSelectTab, liveCount = 0, upcoming
               )}
             </div>
 
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-xl leading-normal">
+            <p className="hidden sm:block text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-xl leading-normal">
               Real-time ball-by-ball telecast feeds, player head-to-heads, and tournament fixtures.
             </p>
 
             {/* Compact Control Strip: Search Trigger + Quick Action Pills */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 pt-0.5 sm:pt-1">
               
-              {/* Compact Search Trigger */}
+              {/* Compact Search Trigger — hidden on mobile (filter search below covers it) */}
               <button
                 type="button"
                 onClick={onOpenSearch}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-navy-800/90 border border-slate-200 dark:border-white/[0.12] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-blue-500/40 text-xs font-medium transition-all shadow-2xs group flex-1 max-w-sm cursor-pointer"
+                className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white dark:bg-navy-800/90 border border-slate-200 dark:border-white/[0.12] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-blue-500/40 text-xs font-medium transition-all shadow-2xs group flex-1 max-w-sm cursor-pointer"
               >
                 <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0" />
                 <span className="truncate">Search players, teams, series...</span>
@@ -104,7 +104,7 @@ export const HeroSection = ({ onOpenSearch, onSelectTab, liveCount = 0, upcoming
                       key={action.id}
                       type="button"
                       onClick={() => onSelectTab(action.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0 ${action.bg} ${action.color}`}
+                      className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-xl border text-[11px] sm:text-xs font-bold transition-all cursor-pointer shadow-2xs flex-shrink-0 ${action.bg} ${action.color}`}
                     >
                       <Icon className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>{action.label}</span>

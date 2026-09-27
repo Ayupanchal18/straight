@@ -1,4 +1,4 @@
-import React, { useState, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useRef, lazy, Suspense } from 'react';
 import {
   RefreshCw,
   Radio,
@@ -29,6 +29,30 @@ import { isMatchLive, isMatchComplete, isMatchUpcoming } from '../../../utils/te
 import { useSEO } from '../../../hooks/useSEO';
 import { generateMatchSchema } from '../../../utils/seo';
 
+/**
+ * Check if a match timestamp falls on a given date in IST (Asia/Kolkata)
+ */
+function isSameDateIST(matchOrTs, targetDate) {
+  if (!matchOrTs || !targetDate) return false;
+  let ts = null;
+  if (typeof matchOrTs === 'number' || (typeof matchOrTs === 'string' && !isNaN(Number(matchOrTs)))) {
+    ts = Number(matchOrTs);
+  } else if (typeof matchOrTs === 'object') {
+    ts = matchOrTs.matchStartTimestamp || matchOrTs.timestamp;
+    if (!ts && matchOrTs.startTime) ts = new Date(matchOrTs.startTime).getTime();
+    if (!ts && matchOrTs.dateTimeGMT) ts = new Date(matchOrTs.dateTimeGMT).getTime();
+    if (!ts && matchOrTs.date) {
+      const p = Date.parse(matchOrTs.date);
+      if (!isNaN(p)) ts = p;
+    }
+  }
+  if (!ts || isNaN(Number(ts))) return false;
+  const matchIST = new Date(Number(ts)).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const targetIST = targetDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return matchIST === targetIST;
+}
+
+
 export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, sharedLiveScores }) => {
   // Use shared live scores from App if available, otherwise fallback to own hook
   const ownHook = useLiveScores(30000, !sharedLiveScores);
@@ -39,11 +63,24 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [selectedDate, setSelectedDate]   = useState(new Date());
+  const dateInputRef = useRef(null);
   const [showSidebar, setShowSidebar] = useState(() => {
     try { return localStorage.getItem('cricket_show_sidebar') !== 'false'; }
     catch { return true; }
   });
   const [justRefreshed, setJustRefreshed] = useState(false);
+
+  // ISO date string (YYYY-MM-DD) in IST for native <input type="date" />
+  const dateInputValue = useMemo(() => {
+    return selectedDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  }, [selectedDate]);
+
+  const handleDateChange = (e) => {
+    if (!e.target.value) return;
+    const [year, month, day] = e.target.value.split('-').map(Number);
+    const newDate = new Date(year, month - 1, day, 12, 0, 0);
+    setSelectedDate(newDate);
+  };
 
   const handleManualRefresh = async () => {
     await refresh();
@@ -97,9 +134,22 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
     return fav?.meta || null;
   }, [matches, pinnedMatchId, favorites]);
 
-  // Filtered matches
+  // Is the selected date today? (IST comparison)
+  const isToday = useMemo(() => {
+    const now = new Date();
+    return selectedDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+        === now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  }, [selectedDate]);
+
+  // Date-aware base list: when not today, filter to matches on that date
+  const dateFilteredMatches = useMemo(() => {
+    if (isToday) return matches;
+    return matches.filter(m => isSameDateIST(m, selectedDate));
+  }, [matches, selectedDate, isToday]);
+
+  // Filtered matches (category + search filters applied on top of date filter)
   const filteredMatches = useMemo(() => {
-    let list = matches;
+    let list = dateFilteredMatches;
     if (filter === 'live')          list = list.filter(isMatchLive);
     else if (filter === 'upcoming') list = list.filter(isMatchUpcoming);
     else if (filter === 'completed') list = list.filter(isMatchComplete);
@@ -127,18 +177,21 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
       });
     }
     return list;
-  }, [matches, filter, searchQuery]);
+  }, [dateFilteredMatches, filter, searchQuery]);
 
-  const liveMatches     = useMemo(() => matches.filter(isMatchLive),     [matches]);
-  const upcomingMatches = useMemo(() => matches.filter(isMatchUpcoming), [matches]);
+  const liveMatches      = useMemo(() => dateFilteredMatches.filter(isMatchLive),     [dateFilteredMatches]);
+  const upcomingMatches  = useMemo(() => dateFilteredMatches.filter(isMatchUpcoming), [dateFilteredMatches]);
+  const completedMatches = useMemo(() => dateFilteredMatches.filter(isMatchComplete), [dateFilteredMatches]);
 
-  const liveCount     = liveMatches.length;
-  const upcomingCount = upcomingMatches.length;
-  const completedCount = useMemo(() => matches.filter(isMatchComplete).length, [matches]);
+  const liveCount      = liveMatches.length;
+  const upcomingCount  = upcomingMatches.length;
+  const completedCount = completedMatches.length;
 
-  const dateDisplay = selectedDate.toLocaleDateString('en-US', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
-  });
+  const dateDisplay = isToday
+    ? 'Today'
+    : selectedDate.toLocaleDateString('en-US', {
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+      });
 
   // Keep active match synced with live score updates
   const currentActiveMatch = useMemo(() => {
@@ -150,7 +203,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
 
   // ── Filter tabs config ──
   const filterTabs = [
-    { id: 'all',           label: `All (${matches.length})`,      activeClass: 'bg-slate-200 text-slate-900 border-slate-300 dark:bg-white/10 dark:text-white dark:border-white/20' },
+    { id: 'all',           label: `All (${dateFilteredMatches.length})`, activeClass: 'bg-slate-200 text-slate-900 border-slate-300 dark:bg-white/10 dark:text-white dark:border-white/20' },
     { id: 'live',          label: `Live (${liveCount})`,           activeClass: 'bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/30', dot: true },
     { id: 'upcoming',      label: `Upcoming (${upcomingCount})`,   activeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30' },
     { id: 'international', label: 'International',                  activeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30' },
@@ -173,7 +226,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
       {/* ═══════════════════════════════════════════════
           MAIN CONTENT — below hero
           ═══════════════════════════════════════════════ */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 sm:py-6 space-y-3 sm:space-y-6">
 
         {/* ── Pinned Featured Match ── */}
         {featuredMatch && !searchQuery && (
@@ -185,7 +238,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
         )}
 
         {/* ── Filter + Control Bar ── */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
 
           {/* Filter tabs */}
           <div className="flex items-center gap-1 overflow-x-auto pb-0.5 custom-scrollbar flex-shrink-0">
@@ -193,7 +246,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
                   filter === tab.id
                     ? tab.activeClass
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 border-transparent hover:bg-slate-100 dark:hover:bg-white/[0.04]'
@@ -258,12 +311,12 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
               </span>
             </Button>
 
-            {/* Toggle sidebar */}
+            {/* Toggle sidebar — desktop only */}
             <button
               type="button"
               onClick={toggleSidebar}
               title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer flex-shrink-0 ${
+              className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer flex-shrink-0 ${
                 showSidebar
                   ? 'bg-slate-100 hover:bg-slate-200 dark:bg-navy-800/80 dark:hover:bg-navy-700 border-slate-200 dark:border-white/[0.09] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   : 'bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-300'
@@ -284,9 +337,9 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
           <div className={`${showSidebar ? 'lg:col-span-8' : ''} space-y-5`}>
 
             {/* Section header with date stepper */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+            <div className="flex items-center justify-between gap-2 sm:gap-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
                   {filter === 'all'           ? 'All Matches'
                    : filter === 'live'        ? '🔴 Live Now'
                    : filter === 'upcoming'    ? 'Upcoming Fixtures'
@@ -296,27 +349,72 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
                    : filter}
                 </h2>
                 {filteredMatches.length > 0 && (
-                  <span className="text-xs text-slate-500">{filteredMatches.length} matches</span>
+                  <span className="text-[10px] sm:text-xs text-slate-500">{filteredMatches.length} matches</span>
                 )}
               </div>
 
-              {/* Date stepper */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-navy-800/60 border border-slate-200 dark:border-white/[0.08] rounded-lg p-0.5 shadow-2xs">
+              {/* Date stepper & direct picker */}
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-navy-800/60 border border-slate-200 dark:border-white/[0.08] rounded-lg p-0.5 shadow-2xs relative">
+                <input
+                  type="date"
+                  ref={dateInputRef}
+                  value={dateInputValue}
+                  onChange={handleDateChange}
+                  className="sr-only absolute"
+                  tabIndex={-1}
+                  aria-label="Pick date"
+                />
                 <button
+                  type="button"
                   onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 86400000))}
                   className="p-1 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/[0.07] transition-colors cursor-pointer"
                   title="Previous day"
+                  aria-label="Previous day"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
-                <div className="flex items-center gap-1.5 px-2">
-                  <CalendarIcon className="w-3 h-3 text-blue-500" />
-                  <span className="text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-300">{dateDisplay}</span>
-                </div>
+
                 <button
+                  type="button"
+                  onClick={() => {
+                    if (dateInputRef.current) {
+                      if (typeof dateInputRef.current.showPicker === 'function') {
+                        dateInputRef.current.showPicker();
+                      } else {
+                        dateInputRef.current.click();
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-md hover:bg-slate-200 dark:hover:bg-white/[0.07] transition-colors cursor-pointer"
+                  title="Click to select specific date"
+                >
+                  <CalendarIcon className="w-3 h-3 text-blue-500" />
+                  <span className={`text-[11px] font-semibold tabular-nums ${
+                    isToday
+                      ? 'text-slate-700 dark:text-slate-300'
+                      : 'text-blue-600 dark:text-blue-400 font-bold'
+                  }`}>
+                    {dateDisplay}
+                  </span>
+                </button>
+
+                {!isToday && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(new Date())}
+                    className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors cursor-pointer"
+                    title="Return to today"
+                  >
+                    Today
+                  </button>
+                )}
+
+                <button
+                  type="button"
                   onClick={() => setSelectedDate(new Date(selectedDate.getTime() + 86400000))}
                   className="p-1 rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/[0.07] transition-colors cursor-pointer"
                   title="Next day"
+                  aria-label="Next day"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -360,7 +458,7 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
                   </button>
                 </div>
                 <div className={`grid grid-cols-1 sm:grid-cols-2 ${showSidebar ? 'xl:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-4'} gap-4`}>
-                  {liveMatches.slice(0, showSidebar ? 6 : 8).map(m => (
+                  {(!isToday ? liveMatches : liveMatches.slice(0, showSidebar ? 6 : 8)).map(m => (
                     <MatchCard key={m.id || m.rawText} match={m} onSelectMatch={m => setSelectedMatch(m)} />
                   ))}
                 </div>
@@ -370,53 +468,73 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
             {/* ── UPCOMING section (shown second when filter=all) ── */}
             {filter === 'all' && upcomingMatches.length > 0 && (
               <div className="space-y-3 pt-2">
-                {/* Date group header */}
-                <div className="date-group-header">
-                  <CalendarIcon className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Upcoming Fixtures</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">Upcoming Fixtures</span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                      {upcomingMatches.length}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setFilter('upcoming')}
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 flex items-center gap-0.5 transition-colors cursor-pointer"
+                  >
+                    View All <ChevronRight className="w-3 h-3" />
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  {upcomingMatches.slice(0, 8).map(m => (
-                    <div
-                      key={m.id || m.rawText}
-                      onClick={() => setSelectedMatch(m)}
-                      className="match-row px-4 py-3 flex items-center gap-3 cursor-pointer group"
-                    >
-                      {/* Status + Format */}
-                      <div className="flex items-center gap-2 flex-shrink-0 w-28">
-                        <span className="badge-upcoming">Upcoming</span>
-                      </div>
-                      {/* Teams */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-semibold text-slate-200 truncate">
-                          {m.team1} vs {m.team2}
-                        </div>
-                        <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                          {m.series || m.matchDescription || 'Cricket Match'}
-                        </div>
-                      </div>
-                      {/* Time / Date */}
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-[11px] font-semibold text-slate-300 tabular-nums">
-                          {m.dateTimeGMT
-                            ? new Date(m.dateTimeGMT).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-                            : '–'}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {m.dateTimeGMT
-                            ? new Date(m.dateTimeGMT).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
-                            : ''}
-                        </div>
-                      </div>
-                      {/* CTA */}
-                      <span className="text-[11px] font-semibold text-blue-400 group-hover:text-blue-300 flex-shrink-0 flex items-center gap-0.5 transition-colors">
-                        View <ChevronRight className="w-3 h-3" />
-                      </span>
-                    </div>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${showSidebar ? 'xl:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-4'} gap-4`}>
+                  {(!isToday ? upcomingMatches : upcomingMatches.slice(0, showSidebar ? 6 : 8)).map(m => (
+                    <MatchCard key={m.id || m.rawText} match={m} onSelectMatch={m => setSelectedMatch(m)} />
                   ))}
                 </div>
               </div>
             )}
+
+            {/* ── COMPLETED / RESULTS section (shown third when filter=all) ── */}
+            {filter === 'all' && completedMatches.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                      {isToday ? 'Recent Results' : 'Match Results'}
+                    </span>
+                    <span className="text-[10px] text-slate-600 dark:text-slate-400 font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-white/[0.08]">
+                      {completedMatches.length}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setFilter('completed')}
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 flex items-center gap-0.5 transition-colors cursor-pointer"
+                  >
+                    View All <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${showSidebar ? 'xl:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-4'} gap-4`}>
+                  {(!isToday ? completedMatches : completedMatches.slice(0, showSidebar ? 6 : 8)).map(m => (
+                    <MatchCard key={m.id || m.rawText} match={m} onSelectMatch={m => setSelectedMatch(m)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Fallback for any other matches when filter=all ── */}
+            {filter === 'all' &&
+              liveMatches.length === 0 &&
+              upcomingMatches.length === 0 &&
+              completedMatches.length === 0 &&
+              filteredMatches.length > 0 && (
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${showSidebar ? 'xl:grid-cols-3' : 'lg:grid-cols-3 xl:grid-cols-4'} gap-4`}>
+                  {filteredMatches.map(match => (
+                    <MatchCard
+                      key={match.id || match.rawText}
+                      match={match}
+                      onSelectMatch={m => setSelectedMatch(m)}
+                    />
+                  ))}
+                </div>
+              )}
 
             {/* ── Filtered match cards (non-all filter) ── */}
             {filter !== 'all' && filteredMatches.length > 0 && (
@@ -433,12 +551,30 @@ export const LiveScoresList = ({ onSelectTab, onSearchPlayer, onOpenSearch, shar
 
             {/* Empty state */}
             {filteredMatches.length === 0 && !loading && (
-              <div className="match-card p-12 text-center">
-                <Radio className="w-9 h-9 mx-auto text-slate-700 mb-3" />
-                <h3 className="text-sm font-semibold text-slate-400">No matches found</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  {searchQuery ? `No results matching "${searchQuery}"` : 'Try a different filter.'}
+              <div className="match-card p-10 sm:p-12 text-center border-dashed">
+                <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-navy-800/80 flex items-center justify-center mb-3">
+                  <CalendarIcon className="w-5 h-5 text-slate-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {!isToday ? `No matches on ${dateDisplay}` : 'No matches found'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  {!isToday
+                    ? 'No live, upcoming, or completed fixtures in the feed for this date.'
+                    : searchQuery
+                    ? `No results matching "${searchQuery}".`
+                    : 'Try selecting a different category or clearing filters.'}
                 </p>
+                {!isToday && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(new Date())}
+                    className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer shadow-sm shadow-blue-500/20"
+                  >
+                    <CalendarIcon className="w-3.5 h-3.5" />
+                    Back to Today
+                  </button>
+                )}
               </div>
             )}
           </div>

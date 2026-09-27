@@ -55,24 +55,35 @@ function evaluateMatchState(m, header = {}, mini = {}) {
   const stateLower = (m.state || header.state || '').toLowerCase().trim();
   const rawTextLower = (m.rawText || '').toLowerCase().trim();
 
+  // 0. Innings Break / Strategic Timeout — match is definitively LIVE, not complete
+  if (
+    stateLower.includes('innings break') ||
+    stateLower === 'strategic timeout' ||
+    statusLower.includes('innings break') ||
+    statusLower.includes('strategic timeout')
+  ) {
+    return { isLive: true, isComplete: false, isUpcoming: false };
+  }
+
+  // Guard: "won the toss" text must NOT trigger match-completion detection
+  const tossInStatus = statusLower.includes('won the toss');
+  const tossInRawText = rawTextLower.includes('won the toss');
+
   // 1. Is it Completed / Ended?
   const isComplete = Boolean(
     header.complete ||
     stateLower === 'complete' ||
     stateLower === 'result' ||
-    statusLower.includes(' won') ||
     statusLower.includes('won by') ||
+    (!tossInStatus && statusLower.includes(' won')) ||
     statusLower.includes('match drawn') ||
     statusLower.includes('match tied') ||
     statusLower.includes('abandon') ||
     statusLower.includes('no result') ||
     statusLower.includes('conceded') ||
-    rawTextLower.includes(' won') ||
-    rawTextLower.includes(' - complete') ||
-    rawTextLower.includes(' - nhnts won') ||
-    rawTextLower.includes(' - indw won') ||
-    rawTextLower.includes(' - tkrw won') ||
-    rawTextLower.includes(' - gloucs won')
+    rawTextLower.includes('won by') ||
+    (!tossInRawText && rawTextLower.includes(' won')) ||
+    rawTextLower.includes(' - complete')
   );
 
   // 2. Is it Upcoming / Not started yet?

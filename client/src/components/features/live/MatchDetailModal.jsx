@@ -606,7 +606,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
 
       <div
-        className="w-full max-w-4xl h-[96vh] sm:h-auto sm:max-h-[92vh] flex flex-col bg-white dark:bg-navy-900 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-2xl overflow-hidden transition-colors"
+        className="w-full max-w-4xl h-[86vh] sm:h-auto sm:max-h-[92vh] flex flex-col bg-white dark:bg-navy-900 border border-slate-200 dark:border-white/[0.08] rounded-xl shadow-2xl overflow-hidden transition-colors"
         onClick={e => e.stopPropagation()}
       >
         {/* ══════════════════════════════════════
@@ -677,10 +677,10 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
         <div className="flex-1 overflow-y-auto custom-scrollbar">
 
           {/* ── SCOREBOARD HERO ── */}
-          <div className="bg-gradient-to-b from-slate-50 to-slate-100/90 dark:from-navy-800 dark:to-navy-900 border-b border-slate-200 dark:border-white/[0.06] px-4 sm:px-6 py-5 sm:py-6">
+          <div className="bg-gradient-to-b from-slate-50 to-slate-100/90 dark:from-navy-800 dark:to-navy-900 border-b border-slate-200 dark:border-white/[0.06] px-3 sm:px-6 py-3 sm:py-6">
 
             {/* Tournament + Format info */}
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <div className="flex items-center gap-2 mb-2 sm:mb-4 flex-wrap">
               <span className="text-[11px] text-slate-400 font-medium">
                 {details?.matchFormat || match.matchFormat || match.matchType || 'T20'} •
               </span>
@@ -694,11 +694,14 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
               {/* Team 1 */}
               <div className="col-span-3">
-                <div className="flex items-center gap-2.5 mb-2">
+                <div className="flex items-center gap-2 sm:gap-2.5 mb-1.5 sm:mb-2">
                   <TeamBadge name={t1Name} shortName={t1Short} size="xl" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">{t1Name}</span>
+                      <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+                        <span className="hidden sm:inline">{t1Name}</span>
+                        <span className="sm:hidden">{t1Name.length > 12 ? t1Short : t1Name}</span>
+                      </span>
                       {isTeam1Batting && hasInningsStarted && (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" title="Batting" />
                       )}
@@ -712,7 +715,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       Wicket!
                     </span>
                   )}
-                  <span className={`score-display text-2xl sm:text-3xl md:text-4xl font-black transition-all ${
+                  <span className={`score-display text-xl sm:text-3xl md:text-4xl font-black transition-all ${
                     flashT1 === 'wicket' ? 'flash-wicket' : flashT1 === 'runs' ? 'flash-runs' : ''
                   }`}>
                     {t1Score}
@@ -740,13 +743,16 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
               {/* Team 2 */}
               <div className="col-span-3 text-right">
-                <div className="flex items-center justify-end gap-2.5 mb-2">
+                <div className="flex items-center justify-end gap-2 sm:gap-2.5 mb-1.5 sm:mb-2">
                   <div className="min-w-0">
                     <div className="flex items-center justify-end gap-1.5">
                       {!isTeam1Batting && hasInningsStarted && (
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0" title="Batting" />
                       )}
-                      <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">{t2Name}</span>
+                      <span className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+                        <span className="hidden sm:inline">{t2Name}</span>
+                        <span className="sm:hidden">{t2Name.length > 12 ? t2Short : t2Name}</span>
+                      </span>
                     </div>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400">{t2Short}</span>
                   </div>
@@ -758,7 +764,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       Wicket!
                     </span>
                   )}
-                  <span className={`score-display text-2xl sm:text-3xl md:text-4xl font-black transition-all ${
+                  <span className={`score-display text-xl sm:text-3xl md:text-4xl font-black transition-all ${
                     flashT2 === 'wicket' ? 'flash-wicket' : flashT2 === 'runs' ? 'flash-runs' : ''
                   }`}>
                     {t2Score}
@@ -780,7 +786,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
 
             {/* ── Status Strip ── */}
             {matchStatusText && (
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-white/[0.05] flex items-center justify-between gap-3">
+              <div className="mt-2 sm:mt-4 pt-2 sm:pt-3 border-t border-slate-200 dark:border-white/[0.05] flex items-center justify-between gap-3">
                 <p className="text-xs sm:text-sm font-medium text-amber-700 dark:text-amber-300/90 flex-1">{matchStatusText}</p>
                 {rrr && (
                   <span className="text-xs font-mono font-bold text-red-600 dark:text-red-400 flex-shrink-0 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-2 py-1 rounded-lg">
@@ -838,7 +844,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 whitespace-nowrap transition-all cursor-pointer -mb-px ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-semibold border-b-2 whitespace-nowrap transition-all cursor-pointer -mb-px ${
                     isActive
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400 font-bold'
                       : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-white/20'
@@ -855,7 +861,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
           </div>
 
           {/* ── TAB CONTENT AREA ── */}
-          <div className="p-4 sm:p-5 space-y-4">
+          <div className="p-3 sm:p-5 space-y-3 sm:space-y-4">
 
 
           {/* ── TAB 1: OVERVIEW ── */}
@@ -1085,22 +1091,22 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                 <>
                   {/* Live Broadcasting Quick Strip */}
                   {broadcastData?.summary && (
-                    <div className="rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-purple-500/10 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-purple-950/30 border border-blue-200 dark:border-blue-500/20 p-3 flex items-center justify-between gap-3 shadow-xs">
-                      <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="rounded-xl bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-purple-500/10 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-purple-950/30 border border-blue-200 dark:border-blue-500/20 p-2.5 sm:p-3 flex items-center justify-between gap-2 sm:gap-3 shadow-xs">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-                        <Tv className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                        <div className="min-w-0 truncate">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 mr-2">
-                            Where to Watch:
+                        <Tv className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 block sm:inline sm:mr-2">
+                            Where to Watch
                           </span>
-                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                          <span className="text-[11px] sm:text-xs font-semibold text-slate-800 dark:text-slate-200 block sm:inline truncate">
                             {broadcastData.summary}
                           </span>
                         </div>
                       </div>
                       <button
                         onClick={() => setActiveTab('broadcast')}
-                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                        className="text-[10px] sm:text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-0.5 sm:gap-1 flex-shrink-0 cursor-pointer whitespace-nowrap"
                       >
                         <span>All Channels</span>
                         <ChevronRight className="w-3 h-3" />
@@ -1375,26 +1381,28 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       ))}
                     </div>
                   ) : (
-                    <div className="py-6 px-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 text-center flex flex-col items-center justify-center">
-                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-2 text-emerald-500 dark:text-emerald-400">
-                        <ShieldCheck className="w-4 h-4" />
+                    <div className="py-3 sm:py-4 px-3 sm:px-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 flex items-center gap-2.5 flex-wrap">
+                      <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 dark:text-emerald-400 flex-shrink-0">
+                        <ShieldCheck className="w-3.5 h-3.5" />
                       </div>
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">No wickets fallen yet</p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-sm">
-                        {selectedFowScorecard?.batTeamName || 'This team'} is {selectedFowScorecard?.score ?? 0}/{selectedFowScorecard?.wickets ?? 0} {selectedFowScorecard?.overs ? `(${selectedFowScorecard.overs} ov)` : ''} without loss.
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">No wickets fallen yet</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 ml-1.5">
+                          — {selectedFowScorecard?.batTeamName || 'This team'} {selectedFowScorecard?.score ?? 0}/{selectedFowScorecard?.wickets ?? 0} {selectedFowScorecard?.overs ? `(${selectedFowScorecard.overs} ov)` : ''}
+                        </span>
+                      </div>
                       {availableScorecards.length > 1 && availableScorecards.some((sc, i) => i !== resolvedFowIndex && ((sc.wickets ?? 0) > 0 || (sc.fallOfWickets?.length ?? 0) > 0)) && (
                         <button
                           onClick={() => {
                             const otherIdx = availableScorecards.findIndex((sc, i) => i !== resolvedFowIndex && ((sc.wickets ?? 0) > 0 || (sc.fallOfWickets?.length ?? 0) > 0));
                             if (otherIdx !== -1) setFowInningsTab(otherIdx);
                           }}
-                          className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold transition-all cursor-pointer border border-slate-200 dark:border-white/10"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-emerald-600 dark:text-emerald-400 text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer border border-slate-200 dark:border-white/10 flex-shrink-0"
                         >
                           <span>
                             View {availableScorecards.find((sc, i) => i !== resolvedFowIndex && ((sc.wickets ?? 0) > 0 || (sc.fallOfWickets?.length ?? 0) > 0))?.batTeamName || 'other team'}'s wickets
                           </span>
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-3 h-3" />
                         </button>
                       )}
                     </div>

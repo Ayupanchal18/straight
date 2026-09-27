@@ -87,7 +87,7 @@ const MatchCardComponent = ({ match, onSelectMatch }) => {
       onTouchStart={() => match.cricbuzzLink && cricketApi.prefetchMatchDetails(match.cricbuzzLink)}
     >
       {/* ── Header: Series + Status badge + Pin ── */}
-      <div className="flex items-center justify-between gap-2 px-3.5 pt-3 pb-2 border-b border-slate-200 dark:border-white/[0.05]">
+      <div className="flex items-center justify-between gap-2 px-3 sm:px-3.5 pt-2.5 sm:pt-3 pb-1.5 sm:pb-2 border-b border-slate-200 dark:border-white/[0.05]">
         <div className="min-w-0 flex-1">
           {/* Tournament / series name */}
           <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 block truncate leading-tight">
@@ -130,7 +130,7 @@ const MatchCardComponent = ({ match, onSelectMatch }) => {
       </div>
 
       {/* ── Scores Arena ── */}
-      <div className="px-3.5 py-3 flex-1 space-y-2.5">
+      <div className="px-3 sm:px-3.5 py-2.5 sm:py-3 flex-1 space-y-2">
         {/* Team 1 */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -215,7 +215,7 @@ const MatchCardComponent = ({ match, onSelectMatch }) => {
       </div>
 
       {/* ── Match Status Strip ── */}
-      <div className="px-3.5 py-2 bg-slate-50/70 dark:bg-white/[0.015] border-t border-slate-200 dark:border-white/[0.04]">
+      <div className="px-3 sm:px-3.5 py-1.5 sm:py-2 bg-slate-50/70 dark:bg-white/[0.015] border-t border-slate-200 dark:border-white/[0.04]">
         <p className="text-[11px] text-amber-600 dark:text-amber-300/90 font-medium truncate leading-tight">
           {match.status || 'Match Scheduled'}
         </p>
@@ -233,7 +233,7 @@ const MatchCardComponent = ({ match, onSelectMatch }) => {
       )}
 
       {/* ── Footer: Venue + CRR + Match Center CTA ── */}
-      <div className="px-3.5 py-2.5 flex items-center justify-between gap-2 border-t border-slate-200 dark:border-white/[0.04]">
+      <div className="px-3 sm:px-3.5 py-2 sm:py-2.5 flex items-center justify-between gap-2 border-t border-slate-200 dark:border-white/[0.04]">
         <div className="flex items-center gap-2 min-w-0">
           {venueDisplay && (
             <div className="flex items-center gap-1 text-[10px] text-slate-500 truncate">

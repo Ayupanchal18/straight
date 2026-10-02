@@ -406,7 +406,9 @@ async function scrapeLiveMatches() {
         m.currentRunRate = mini.currentRunRate || null;
         m.target = mini.target || null;
         m.recentOvers = mini.recentOvsStats || null;
-        m.recentBalls = mini.recentOvsStats ? mini.recentOvsStats.trim().split(/\s+/).filter(Boolean) : [];
+        m.recentBalls = mini.recentOvsStats 
+          ? mini.recentOvsStats.trim().split(/\s+/).filter(b => b && b !== '|' && b !== '...' && b !== '..') 
+          : [];
 
         // Accurate state classification after receiving real-time API data
         const classification = evaluateMatchState(m, header, mini);
@@ -612,7 +614,7 @@ async function scrapeMatchDetails(matchUrl) {
       // Recent overs & balls array
       results.recentOvers = mini.recentOvsStats || null;
       results.recentBalls = mini.recentOvsStats
-        ? mini.recentOvsStats.trim().split(/\s+/).filter(Boolean)
+        ? mini.recentOvsStats.trim().split(/\s+/).filter(b => b && b !== '|' && b !== '...' && b !== '..')
         : [];
 
       // Last wicket string

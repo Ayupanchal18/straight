@@ -72,10 +72,10 @@ export function useLiveScores(defaultInterval = 30000, autoPoll = true) {
               const currW2 = parseInt((m.team2Score || '').split('/')[1], 10) || 0;
 
               if (currW1 > prevW1) {
-                detectedWicket = { team: m.team1ShortName || m.team1, score: m.team1Score, match };
+                detectedWicket = { team: m.team1ShortName || m.team1, score: m.team1Score, match: m };
                 break;
               } else if (currW2 > prevW2) {
-                detectedWicket = { team: m.team2ShortName || m.team2, score: m.team2Score, match };
+                detectedWicket = { team: m.team2ShortName || m.team2, score: m.team2Score, match: m };
                 break;
               }
             }

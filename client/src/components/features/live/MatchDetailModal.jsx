@@ -307,6 +307,91 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
     ? details.recentBalls 
     : (!isUpcoming && match.recentBalls?.length > 0 ? match.recentBalls : []);
 
+  // Recent Overs Data: Limit strictly to last 12 balls & partition into Previous Over and This Over
+  const recentOversData = useMemo(() => {
+    if (isUpcoming || !hasInningsStarted) return null;
+
+    const rawOvers = String(details?.recentOvers || match.recentOvers || '').trim();
+    const rawBalls = (details?.recentBalls?.length > 0 ? details.recentBalls : (match.recentBalls?.length > 0 ? match.recentBalls : []))
+      .filter(b => b && b !== '|' && b !== '...' && b !== '..');
+
+    if (!rawOvers && rawBalls.length === 0) return null;
+
+    let prevOverBalls = [];
+    let thisOverBalls = [];
+
+    // If rawOvers contains pipe delimiter '|', use it to separate overs accurately
+    if (rawOvers && rawOvers.includes('|')) {
+      const overSections = rawOvers
+        .split('|')
+        .map(s => s.trim().split(/\s+/).filter(b => b && b !== '|' && b !== '...' && b !== '..'))
+        .filter(arr => arr.length > 0);
+
+      if (overSections.length >= 2) {
+        prevOverBalls = overSections[overSections.length - 2].slice(-6);
+        thisOverBalls = overSections[overSections.length - 1].slice(-6);
+      } else if (overSections.length === 1) {
+        thisOverBalls = overSections[0].slice(-6);
+      }
+    } else if (rawBalls.length > 0) {
+      const clean = rawBalls.slice(-12);
+      if (clean.length <= 6) {
+        thisOverBalls = clean;
+      } else {
+        prevOverBalls = clean.slice(0, clean.length - 6).slice(-6);
+        thisOverBalls = clean.slice(-6);
+      }
+    }
+
+    // Ensure total balls does not exceed 12
+    const totalBalls = [...prevOverBalls, ...thisOverBalls].slice(-12);
+    if (totalBalls.length === 0) return null;
+
+    const calcOverRuns = (balls) => {
+      return balls.reduce((sum, b) => {
+        const s = String(b).trim().toUpperCase();
+        if (s === '.' || s === '0' || s === 'W') return sum;
+        const digits = s.replace(/[^\d]/g, '');
+        let runs = digits ? parseInt(digits, 10) : 0;
+        if (s.includes('WD') && runs === 0) runs = 1;
+        if (s.includes('NB') || s.startsWith('N')) runs += 1;
+        return sum + (isNaN(runs) ? 0 : runs);
+      }, 0);
+    };
+
+    const prevRuns = calcOverRuns(prevOverBalls);
+    const thisRuns = calcOverRuns(thisOverBalls);
+    const prevWkts = prevOverBalls.filter(b => String(b).toUpperCase().includes('W')).length;
+    const thisWkts = thisOverBalls.filter(b => String(b).toUpperCase().includes('W')).length;
+
+    // Derive over numbers if current overs are available
+    const curOvFloor = Math.floor(currentOversNum);
+    const thisOverNum = currentOversNum > 0 
+      ? (currentOversNum % 1 === 0 ? curOvFloor : curOvFloor + 1)
+      : null;
+    const prevOverNum = thisOverNum && thisOverNum > 1 ? thisOverNum - 1 : null;
+
+    return {
+      hasData: totalBalls.length > 0,
+      totalBalls,
+      prevOver: prevOverBalls.length > 0 ? {
+        label: prevOverNum ? `Over ${prevOverNum}` : 'Previous Over',
+        shortLabel: prevOverNum ? `Ov ${prevOverNum}` : 'Prev Over',
+        balls: prevOverBalls,
+        runs: prevRuns,
+        wkts: prevWkts,
+      } : null,
+      thisOver: thisOverBalls.length > 0 ? {
+        label: thisOverNum ? `Over ${thisOverNum} (This Over)` : 'This Over',
+        shortLabel: thisOverNum ? `Ov ${thisOverNum}` : 'This Over',
+        balls: thisOverBalls,
+        runs: thisRuns,
+        wkts: thisWkts,
+        isLive: isLive,
+      } : null,
+    };
+  }, [details?.recentOvers, match.recentOvers, details?.recentBalls, match.recentBalls, currentOversNum, isUpcoming, hasInningsStarted, isLive]);
+
   // Current Partnership (strictly authentic data only - no fake fallback)
   const partnership = useMemo(() => {
     if (isUpcoming || !hasInningsStarted) return null;
@@ -586,16 +671,36 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
     return rawStatus;
   }, [rawStatus, details?.matchStartTimestamp, match.matchStartTimestamp, details?.startTime, match.startTime]);
 
-  // ── Ball Bead helper (reused in bead strip) ──
-  const BallBeadInner = ({ ball }) => {
+  // ── Ball Bead helper (reused in bead strips and recent overs) ──
+  const BallBeadInner = ({ ball, size = 'md' }) => {
     const b = String(ball ?? '').trim();
-    if (b === '4') return <span className="bead bead-four">{b}</span>;
-    if (b === '6') return <span className="bead bead-six">{b}</span>;
-    if (b === 'W') return <span className="bead bead-wicket">W</span>;
-    if (b === '0' || b === '.' || b === '') return <span className="bead bead-dot">·</span>;
-    if (b === 'WD' || b === 'NB' || b === 'LB')
-      return <span className="bead bead-extras" style={{ fontSize: '8px' }}>{b}</span>;
-    return <span className="bead bead-run">{b}</span>;
+    if (!b || b === '|' || b === '...' || b === '..') return null;
+    const isW = b.toUpperCase().includes('W') && !b.toUpperCase().includes('WD');
+    const isFour = b === '4' || b.toUpperCase() === 'N4';
+    const isSix = b === '6' || b.toUpperCase() === 'N6';
+    const isDot = b === '0' || b === '.' || b === '•';
+    const isExtra = b.toUpperCase().includes('WD') || b.toUpperCase().includes('NB') || b.toUpperCase().includes('LB') || (b.toUpperCase().includes('B') && b.length <= 3);
+
+    let colorClasses = 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-white/10';
+    if (isW) {
+      colorClasses = 'bg-rose-500 text-white font-black shadow-xs shadow-rose-500/30';
+    } else if (isSix) {
+      colorClasses = 'bg-purple-600 text-white font-black shadow-xs shadow-purple-500/30';
+    } else if (isFour) {
+      colorClasses = 'bg-emerald-500 text-white font-black shadow-xs shadow-emerald-500/30';
+    } else if (isDot) {
+      colorClasses = 'bg-slate-200/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold';
+    } else if (isExtra) {
+      colorClasses = 'bg-blue-500/15 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-bold';
+    }
+
+    const sizeClasses = size === 'sm' ? 'w-5 h-5 text-[9px]' : 'w-6 h-6 sm:w-7 sm:h-7 text-[10px] sm:text-xs';
+
+    return (
+      <span className={`${sizeClasses} rounded-full flex items-center justify-center font-black tabular-nums transition-all flex-shrink-0 ${colorClasses}`}>
+        {isDot ? '·' : b}
+      </span>
+    );
   };
 
   return createPortal(
@@ -612,33 +717,33 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
         {/* ══════════════════════════════════════
             HEADER: Breadcrumb + Status + Actions
             ══════════════════════════════════════ */}
-        <div className="flex-shrink-0 bg-slate-50 dark:bg-navy-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.07] px-4 sm:px-5 py-3 flex items-center justify-between gap-3">
+        <div className="flex-shrink-0 bg-slate-50 dark:bg-navy-950/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/[0.07] px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
           {/* Left: breadcrumb + series */}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-              <span className="hover:text-slate-800 dark:hover:text-slate-300 cursor-pointer transition-colors">Live</span>
-              <ChevronRight className="w-3 h-3 flex-shrink-0" />
-              <span className="text-slate-600 dark:text-slate-400 truncate max-w-[200px]">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+            <div className="flex items-center gap-1 sm:gap-1.5 text-[11px] text-slate-500 font-medium min-w-0 truncate">
+              <span className="hover:text-slate-800 dark:hover:text-slate-300 cursor-pointer transition-colors flex-shrink-0">Live</span>
+              <ChevronRight className="w-3 h-3 flex-shrink-0 text-slate-400" />
+              <span className="text-slate-600 dark:text-slate-400 truncate max-w-[110px] sm:max-w-[220px]">
                 {details?.series || match.series || 'International Cricket'}
               </span>
-              <ChevronRight className="w-3 h-3 flex-shrink-0" />
+              <ChevronRight className="w-3 h-3 flex-shrink-0 text-slate-400 hidden sm:block" />
               <span className="text-slate-800 dark:text-slate-300 font-semibold truncate max-w-[140px] hidden sm:block">
                 {t1Short} vs {t2Short}
               </span>
             </div>
             {/* Status badges */}
             {isLive && (
-              <span className="badge-live flex-shrink-0">
+              <span className="badge-live flex-shrink-0 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                 LIVE
               </span>
             )}
-            {isComplete && <span className="badge-result flex-shrink-0">RESULT</span>}
-            {isUpcoming && <span className="badge-upcoming flex-shrink-0">UPCOMING</span>}
+            {isComplete && <span className="badge-result flex-shrink-0 whitespace-nowrap">RESULT</span>}
+            {isUpcoming && <span className="badge-upcoming flex-shrink-0 whitespace-nowrap">UPCOMING</span>}
           </div>
 
           {/* Right: format + venue + refresh + close */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {/* Venue (desktop) */}
             {venueDisplay && (
               <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.07] text-[11px] text-slate-600 dark:text-slate-400">
@@ -657,7 +762,7 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
               }`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span className="text-[11px]">{justRefreshed ? 'Synced' : 'Refresh'}</span>
+              <span className="text-[11px] hidden sm:inline">{justRefreshed ? 'Synced' : 'Refresh'}</span>
             </button>
             {/* Close */}
             <button
@@ -796,14 +901,51 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
               </div>
             )}
 
-            {/* ── Over Bead Strip ── */}
-            {recentBalls.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/[0.05]">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {recentBalls.map((b, i) => (
-                    <BallBeadInner key={i} ball={b} />
-                  ))}
+            {/* ── Over Bead Strip (Last 12 Balls: Previous Over & This Over) ── */}
+            {recentOversData?.hasData && (
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-white/[0.05] flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  {recentOversData.prevOver && (
+                    <div className="flex items-center gap-1.5 bg-slate-200/60 dark:bg-navy-950/60 px-2 py-1 rounded-lg border border-slate-300/40 dark:border-white/5">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        {recentOversData.prevOver.shortLabel}:
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {recentOversData.prevOver.balls.map((b, i) => (
+                          <BallBeadInner key={`hero-prev-${i}`} ball={b} size="sm" />
+                        ))}
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 ml-0.5">
+                        ({recentOversData.prevOver.runs}r{recentOversData.prevOver.wkts > 0 ? `, ${recentOversData.prevOver.wkts}w` : ''})
+                      </span>
+                    </div>
+                  )}
+
+                  {recentOversData.prevOver && recentOversData.thisOver && (
+                    <span className="text-slate-400 dark:text-white/20 font-black text-xs hidden sm:inline">•</span>
+                  )}
+
+                  {recentOversData.thisOver && (
+                    <div className="flex items-center gap-1.5 bg-emerald-500/10 dark:bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                      <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                        {recentOversData.thisOver.shortLabel}:
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {recentOversData.thisOver.balls.map((b, i) => (
+                          <BallBeadInner key={`hero-this-${i}`} ball={b} size="sm" />
+                        ))}
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 ml-0.5">
+                        ({recentOversData.thisOver.runs}r{recentOversData.thisOver.wkts > 0 ? `, ${recentOversData.thisOver.wkts}w` : ''})
+                      </span>
+                    </div>
+                  )}
                 </div>
+
+                <span className="text-[10px] font-semibold text-slate-400 hidden md:inline">
+                  Last {recentOversData.totalBalls.length} balls
+                </span>
               </div>
             )}
 
@@ -1117,86 +1259,123 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                   {/* Live Chase HUD (2nd Innings) or Match Projection HUD (1st Innings) */}
                   {isChase ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 sm:gap-2.5">
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">TARGET</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">TARGET</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-amber-600 dark:text-amber-400 tabular-nums">{target}</span>
                       </div>
 
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">REQUIRED RUNS</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">REQUIRED RUNS</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tabular-nums">{requiredRuns ?? '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">BALLS LEFT</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">BALLS LEFT</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tabular-nums">{ballsRemaining ?? '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">CRR</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">CRR</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{crr || '–'}</span>
                       </div>
 
-                      <div className="col-span-2 sm:col-span-2 md:col-span-1 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">RRR</span>
+                      <div className="col-span-2 sm:col-span-2 md:col-span-1 rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">RRR</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-rose-600 dark:text-rose-400 tabular-nums">{rrr || '–'}</span>
                       </div>
                     </div>
                   ) : hasInningsStarted ? (
                     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">CURRENT RR (CRR)</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">CURRENT RR (CRR)</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{crr || '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">OVERS LEFT</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">OVERS LEFT</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tabular-nums">
                           {oversRemaining ? `${oversRemaining} ov` : (ballsRemaining !== null ? `${ballsRemaining} b` : '–')}
                         </span>
                       </div>
 
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">PROJECTED (AT CRR)</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">PROJECTED (AT CRR)</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-amber-600 dark:text-amber-400 tabular-nums">{projectedAtCRR || '–'}</span>
                       </div>
 
-                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm">
-                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider">PROJECTED (6.0 RPO)</span>
+                      <div className="rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-2.5 sm:p-3 text-center shadow-sm flex flex-col justify-center min-h-[64px]">
+                        <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 block tracking-wider truncate mb-0.5">PROJECTED (6.0 RPO)</span>
                         <span className="text-base sm:text-lg md:text-xl font-black text-sky-600 dark:text-sky-300 tabular-nums">{projectedAt6 || '–'}</span>
                       </div>
                     </div>
                   ) : null}
 
                   {/* Match Flow: Recent Overs Strip + Partnership + Last Wicket (Strictly authentic data only) */}
-                  {(recentBalls.length > 0 || partnership !== null || lastWicketDisplay) && (
+                  {(recentOversData?.hasData || partnership !== null || lastWicketDisplay) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-2.5 sm:gap-3 items-stretch">
                       
-                      {/* Recent Overs */}
-                      {recentBalls.length > 0 && (
-                        <div className={`${partnership && lastWicketDisplay ? 'sm:col-span-2 md:col-span-6' : 'sm:col-span-2 md:col-span-12'} rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 flex items-center justify-between gap-2.5 sm:gap-3 shadow-sm`}>
-                          <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex-shrink-0">Recent Overs</span>
-                          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar py-0.5">
-                            {recentBalls.map((b, idx) => {
-                              const isBoundary = b === '4' || b === '6';
-                              const isWicket = b.toLowerCase().includes('w');
-                              return (
-                                <span
-                                  key={idx}
-                                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-black tabular-nums transition-all flex-shrink-0 ${
-                                    isWicket
-                                      ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
-                                      : isBoundary
-                                      ? 'bg-emerald-500 text-white dark:text-slate-950 font-black shadow-sm shadow-emerald-500/30'
-                                      : b === '0' || b === '•'
-                                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                      : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-200 border border-slate-300 dark:border-white/5'
-                                  }`}
-                                >
-                                  {b}
+                      {/* Recent Overs: Limited strictly to last 12 balls, clearly distinguishing Previous Over vs This Over */}
+                      {recentOversData?.hasData && (
+                        <div className={`${partnership && lastWicketDisplay ? 'sm:col-span-2 md:col-span-6' : 'sm:col-span-2 md:col-span-12'} rounded-xl bg-slate-100/90 dark:bg-[#0d1424] border border-slate-200 dark:border-white/5 p-3 sm:p-3.5 shadow-sm space-y-2.5`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] sm:text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-wider">Recent Overs</span>
+                              <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400">(Last {recentOversData.totalBalls.length} balls)</span>
+                            </div>
+                            {recentOversData.thisOver?.isLive && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Active Over
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5 pt-0.5">
+                            {/* Previous Over (up to 6 balls) */}
+                            {recentOversData.prevOver && (
+                              <div className="flex-1 flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-200/50 dark:bg-white/[0.02] border border-slate-200/80 dark:border-white/5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
+                                    {recentOversData.prevOver.label}
+                                  </span>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {recentOversData.prevOver.balls.map((b, idx) => (
+                                      <BallBeadInner key={`tab-prev-${idx}`} ball={b} size="sm" />
+                                    ))}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                  {recentOversData.prevOver.runs}r{recentOversData.prevOver.wkts > 0 ? `, ${recentOversData.prevOver.wkts}w` : ''}
                                 </span>
-                              );
-                            })}
+                              </div>
+                            )}
+
+                            {/* Over Divider Arrow */}
+                            {recentOversData.prevOver && recentOversData.thisOver && (
+                              <div className="hidden sm:flex items-center justify-center text-slate-400 dark:text-slate-600 flex-shrink-0">
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+
+                            {/* This Over / Current Over (up to 6 balls) */}
+                            {recentOversData.thisOver && (
+                              <div className="flex-1 flex items-center justify-between gap-2 p-2 rounded-lg bg-emerald-500/[0.08] dark:bg-emerald-500/[0.06] border border-emerald-500/20">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wide whitespace-nowrap flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                                    {recentOversData.thisOver.label}
+                                  </span>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {recentOversData.thisOver.balls.map((b, idx) => (
+                                      <BallBeadInner key={`tab-this-${idx}`} ball={b} size="sm" />
+                                    ))}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                                  {recentOversData.thisOver.runs}r{recentOversData.thisOver.wkts > 0 ? `, ${recentOversData.thisOver.wkts}w` : ''}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1248,40 +1427,40 @@ export const MatchDetailModal = ({ match, onClose, onRefreshScores }) => {
                       </div>
 
                       <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full min-w-[380px] sm:min-w-[480px] text-left border-collapse text-xs">
+                        <table className="w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="border-b border-slate-200 dark:border-white/5 text-[9px] sm:text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-50/50 dark:bg-transparent">
-                              <th className="py-2 sm:py-2.5 px-3 sm:px-4">BATTER</th>
-                              <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">R</th>
-                              <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">B</th>
-                              <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">4S</th>
-                              <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">6S</th>
-                              <th className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">SR</th>
-                              <th className="py-2 sm:py-2.5 px-3 sm:px-4 text-right">STATUS</th>
+                              <th className="py-2 sm:py-2.5 px-2.5 sm:px-4 whitespace-nowrap">BATTER</th>
+                              <th className="py-2 sm:py-2.5 px-1.5 sm:px-3 text-center whitespace-nowrap">R</th>
+                              <th className="py-2 sm:py-2.5 px-1.5 sm:px-3 text-center whitespace-nowrap">B</th>
+                              <th className="py-2 sm:py-2.5 px-1.5 sm:px-3 text-center whitespace-nowrap">4S</th>
+                              <th className="py-2 sm:py-2.5 px-1.5 sm:px-3 text-center whitespace-nowrap">6S</th>
+                              <th className="py-2 sm:py-2.5 px-1.5 sm:px-3 text-center whitespace-nowrap">SR</th>
+                              <th className="py-2 sm:py-2.5 px-2.5 sm:px-4 text-right whitespace-nowrap">STATUS</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 dark:divide-white/[0.03]">
                             {batsmenAtCrease.map((b, i) => (
                               <tr key={i} className={b.isStriker ? 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.04]' : ''}>
-                                <td className="py-2.5 sm:py-3 px-3 sm:px-4 font-bold text-slate-900 dark:text-white">
-                                  <div className="flex items-center gap-1.5 truncate max-w-[120px] sm:max-w-[180px]">
+                                <td className="py-2 sm:py-3 px-2.5 sm:px-4 font-bold text-slate-900 dark:text-white">
+                                  <div className="flex items-center gap-1.5 truncate max-w-[110px] sm:max-w-[180px]">
                                     <span className="truncate">{b.name}</span>
                                     {b.isStriker && <Zap className="w-3 h-3 text-amber-500 fill-amber-500 flex-shrink-0" />}
                                   </div>
                                 </td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center font-black text-emerald-600 dark:text-emerald-400 tabular-nums text-xs sm:text-sm">{b.runs}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-700 dark:text-slate-300 tabular-nums">{b.balls}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.fours}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums">{b.sixes}</td>
-                                <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center font-bold text-amber-600 dark:text-amber-300 tabular-nums">{b.strikeRate}</td>
-                                <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
+                                <td className="py-2 sm:py-3 px-1.5 sm:px-3 text-center font-black text-emerald-600 dark:text-emerald-400 tabular-nums text-xs sm:text-sm whitespace-nowrap">{b.runs}</td>
+                                <td className="py-2 sm:py-3 px-1.5 sm:px-3 text-center text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap">{b.balls}</td>
+                                <td className="py-2 sm:py-3 px-1.5 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">{b.fours}</td>
+                                <td className="py-2 sm:py-3 px-1.5 sm:px-3 text-center text-slate-500 dark:text-slate-400 tabular-nums whitespace-nowrap">{b.sixes}</td>
+                                <td className="py-2 sm:py-3 px-1.5 sm:px-3 text-center font-bold text-amber-600 dark:text-amber-300 tabular-nums whitespace-nowrap">{b.strikeRate}</td>
+                                <td className="py-2 sm:py-3 px-2.5 sm:px-4 text-right whitespace-nowrap">
                                   {b.isStriker ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 uppercase tracking-wide">
+                                    <span className="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 uppercase tracking-wide whitespace-nowrap">
                                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                       STRIKER
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase tracking-wide">
+                                    <span className="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase tracking-wide whitespace-nowrap">
                                       NON-STRIKER
                                     </span>
                                   )}
